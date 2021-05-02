@@ -1,5 +1,1 @@
-{
-    "appVersion":"1.0.0",
-    "shouldRun":true,
-    "dbPath":"prinstarProd"
-}
+{"appVersion":"1.0.0","shouldRun":true,"dbPath":"prinstarProd"}
