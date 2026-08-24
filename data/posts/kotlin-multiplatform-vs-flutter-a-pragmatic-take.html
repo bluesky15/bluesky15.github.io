@@ -1,0 +1,39 @@
+<p>Every few months someone asks me which cross-platform stack to choose. After shipping production features in both Flutter and Kotlin Multiplatform (KMP), my honest answer is: the question is usually framed wrong. It&#39;s not &quot;which is better&quot; — it&#39;s &quot;which trade-offs fit your team&quot;.</p>
+<h2>Where Flutter wins</h2>
+<ul>
+<li><strong>One UI everywhere.</strong> Pixel-perfect brand consistency across iOS and Android, with Skia/Impeller rendering every frame.</li>
+<li><strong>Velocity for small teams.</strong> Hot reload plus one language plus one widget catalog means two engineers can genuinely ship an entire product.</li>
+<li><strong>Tooling maturity.</strong> DevTools, golden tests, and CI recipes are all first-party.</li>
+</ul>
+<h2>Where KMP wins</h2>
+<ul>
+<li><strong>Native UX by default.</strong> You share business logic and keep SwiftUI/Compose for the parts users touch — no platform feel to fake.</li>
+<li><strong>Incremental adoption.</strong> You can share a networking layer in an existing app without rewriting anything.</li>
+<li><strong>Kotlin leverage.</strong> If your team already lives in Kotlin (and on Android), there is no new language tax.</li>
+</ul>
+<h2>The decision matrix I use</h2>
+<table>
+<thead>
+<tr>
+<th>Question</th>
+<th>Points to</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Small team, greenfield, brand-heavy UI</td>
+<td>Flutter</td>
+</tr>
+<tr>
+<td>Large existing native codebase</td>
+<td>KMP</td>
+</tr>
+<tr>
+<td>Heavy platform APIs (BT, camera pipelines)</td>
+<td>KMP or full native</td>
+</tr>
+<tr>
+<td>Design team wants pixel-identical screens</td>
+<td>Flutter</td>
+</tr>
+</tbody></table>
+<p>Neither is a mistake. Choosing deliberately based on team shape matters more than the stack itself.</p>
