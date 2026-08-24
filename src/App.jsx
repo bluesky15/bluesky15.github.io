@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import Nav from "./components/Nav.jsx";
+import Profile from "./components/Profile.jsx";
+import Blogs from "./components/Blogs.jsx";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [theme, setTheme] = useState(() =>
+    document.documentElement.dataset.theme === "retro" ? "retro" : "modern"
+  );
+  const [view, setView] = useState("home");
+  const [profile, setProfile] = useState(null);
+  const [profileFailed, setProfileFailed] = useState(false);
+
+  useEffect(() => {
+    fetch(`${import.meta.env.BASE_URL}data/profile.json`)
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status);
+        return res.json();
+      })
+      .then(setProfile)
+      .catch(() => setProfileFailed(true));
+  }, []);
+
+  useEffect(() => {
+    if (theme === "retro") {
+      document.documentElement.dataset.theme = "retro";
+    } else {
+      delete document.documentElement.dataset.theme;
+    }
+    try {
+      localStorage.setItem("theme", theme);
+    } catch {
+      return;
+    }
+  }, [theme]);
+
+  const navigate = (id) => {
+    if (id === "blogs") {
+      setView("blogs");
+      setTimeout(() => window.scrollTo({ top: 0 }), 0);
+      return;
+    }
+    setView("home");
+    setTimeout(() => {
+      if (id === "top") {
+        window.scrollTo({ top: 0 });
+        return;
+      }
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    }, 0);
+  };
 
   return (
     <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <a className="skip-to-content" href="#about">
+        Skip to Content
+      </a>
+      <Nav theme={theme} setTheme={setTheme} view={view} onNavigate={navigate} />
+      {view === "blogs" ? (
+        <Blogs onBack={() => navigate("about")} />
+      ) : (
+        <Profile profile={profile} failed={profileFailed} />
+      )}
     </>
-  )
+  );
 }
-
-export default App
