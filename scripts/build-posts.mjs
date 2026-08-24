@@ -1,52 +1,77 @@
 import { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import matter from "gray-matter";
 import { marked } from "marked";
 
 const POSTS_DIR = "content/posts";
 const OUT_DIR = "public/data";
 const POSTS_OUT = join(OUT_DIR, "posts");
-
 const REQUIRED = ["title", "date", "tags"];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-rmSync(POSTS_OUT, { recursive: true, force: true });
-mkdirSync(POSTS_OUT, { recursive: true });
-
-const files = readdirSync(POSTS_DIR).filter((f) => f.endsWith(".md")).sort();
-
-if (files.length === 0) {
-  console.error(`No markdown files found in ${POSTS_DIR}/`);
-  process.exit(1);
-}
-
-const posts = [];
-for (const file of files) {
+export function parsePost(file, raw) {
   const slug = file.replace(/\.md$/, "");
-  const { data, content } = matter(readFileSync(join(POSTS_DIR, file), "utf8"));
+  const { data, content } = matter(raw);
 
-  const missing = REQUIRED.filter((k) => !data[k] || (Array.isArray(data[k]) && data[k].length === 0));
+  const missing = REQUIRED.filter(
+    (k) => !data[k] || (Array.isArray(data[k]) && data[k].length === 0)
+  );
   if (missing.length > 0) {
-    console.error(`${file}: missing frontmatter field(s): ${missing.join(", ")}`);
-    process.exit(1);
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(data.date))) {
-    console.error(`${file}: date must be YYYY-MM-DD`);
-    process.exit(1);
+    throw new Error(`${file}: missing frontmatter field(s): ${missing.join(", ")}`);
   }
 
-  const html = marked.parse(content.trim(), { gfm: true });
-  writeFileSync(join(POSTS_OUT, `${slug}.html`), html);
+  const date =
+    data.date instanceof Date ? data.date.toISOString().slice(0, 10) : String(data.date);
+  if (!DATE_RE.test(date)) {
+    throw new Error(`${file}: date must be YYYY-MM-DD`);
+  }
 
-  posts.push({
-    slug,
-    title: String(data.title),
-    summary: String(data.summary ?? ""),
-    date: String(data.date),
-    tags: (data.tags ?? []).map(String),
-    readTime: String(data.readTime ?? ""),
-  });
+  return {
+    post: {
+      slug,
+      title: String(data.title),
+      summary: String(data.summary ?? ""),
+      date,
+      tags: (data.tags ?? []).map(String),
+      readTime: String(data.readTime ?? ""),
+    },
+    html: marked.parse(content.trim(), { gfm: true }),
+  };
 }
 
-posts.sort((a, b) => b.date.localeCompare(a.date));
-writeFileSync(join(OUT_DIR, "blogs.json"), JSON.stringify(posts, null, 2) + "\n");
-console.log(`Built ${posts.length} posts -> ${OUT_DIR}/blogs.json + ${POSTS_OUT}/*.html`);
+export function sortPosts(posts) {
+  return [...posts].sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export function buildPosts(postsDir = POSTS_DIR, outDir = OUT_DIR, fs = { readdirSync, readFileSync, mkdirSync, writeFileSync, rmSync }) {
+  const postsOutDir = join(outDir, "posts");
+  fs.rmSync(postsOutDir, { recursive: true, force: true });
+  fs.mkdirSync(postsOutDir, { recursive: true });
+
+  const files = fs.readdirSync(postsDir).filter((f) => f.endsWith(".md")).sort();
+  if (files.length === 0) {
+    throw new Error(`No markdown files found in ${postsDir}/`);
+  }
+
+  const posts = [];
+  for (const file of files) {
+    const { post, html } = parsePost(file, fs.readFileSync(join(postsDir, file), "utf8"));
+    fs.writeFileSync(join(postsOutDir, `${post.slug}.html`), html);
+    posts.push(post);
+  }
+
+  const sorted = sortPosts(posts);
+  fs.writeFileSync(join(outDir, "blogs.json"), JSON.stringify(sorted, null, 2) + "\n");
+  return sorted;
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    const count = buildPosts().length;
+    console.log(`Built ${count} posts -> ${OUT_DIR}/blogs.json + ${POSTS_OUT}/*.html`);
+  } catch (err) {
+    console.error(err.message);
+    process.exit(1);
+  }
+}

@@ -167,7 +167,27 @@ No Rust? The script keeps using the last committed `flags.wasm`.
 | `npm run blogs` | Regenerate `blogs.json` + post HTML from Markdown |
 | `npm run wasm` | Compile `wasm/flags/flags.json` → `flags.wasm` |
 | `npm run lint` | ESLint |
+| `npm run test` | Run unit + component tests once |
+| `npm run test:watch` | Tests in watch mode |
+| `npm run test:coverage` | Tests with V8 coverage report |
 | `npm run preview` | Serve `dist/` locally |
+
+---
+
+## Tests
+
+Unit and component tests run on [Vitest](https://vitest.dev) with Testing Library (jsdom):
+
+| Suite | Covers |
+|---|---|
+| `tests/build-posts.test.mjs` | Frontmatter parsing & validation, slug rules, date coercion, markdown/GFM rendering, sorting, file generation, error paths |
+| `tests/flags-wasm.test.mjs` | The compiled `flags.wasm`: valid binary, instantiates import-free, correct keys/types, **in sync with `wasm/flags/flags.json`** |
+| `src/__tests__/Nav.test.jsx` | Section links, flag-gating of Blogs/Resume/login/theme toggle, section numbering after filtering |
+| `src/__tests__/Profile.test.jsx` | Loading/error states, content rendering, social icons, Resume gating |
+| `src/__tests__/Blogs.test.jsx` | Archive list, count pluralization, year/tag filters, reader view lazy-loading, error states |
+| `src/__tests__/App.test.jsx` | Wasm flag loading, render gating until flags resolve, fallback defaults |
+
+Run `npm test` before pushing; the flags-wasm suite will fail if you edited `wasm/flags/flags.json` but forgot `npm run wasm`.
 
 ---
 
