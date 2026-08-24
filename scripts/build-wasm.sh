@@ -19,7 +19,18 @@ elif command -v go >/dev/null 2>&1; then
   cd "$TMP"
   GOOS=js GOARCH=wasm go build -o "$ROOT/public/data/flags.wasm" .
   cd "$ROOT"
-  cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" public/wasm_exec.js
+  GLUE=""
+  for p in "$(go env GOROOT)/lib/wasm/wasm_exec.js" "$(go env GOROOT)/misc/wasm/wasm_exec.js"; do
+    if [ -f "$p" ]; then
+      GLUE="$p"
+      break
+    fi
+  done
+  if [ -z "$GLUE" ]; then
+    echo "error: wasm_exec.js not found under GOROOT ($(go env GOROOT))" >&2
+    exit 1
+  fi
+  cp "$GLUE" public/wasm_exec.js
   echo "Built public/data/flags.wasm with Go ($(du -h public/data/flags.wasm | cut -f1 | tr -d ' '))"
 else
   if [ -f public/data/flags.wasm ] && [ -f public/wasm_exec.js ]; then
