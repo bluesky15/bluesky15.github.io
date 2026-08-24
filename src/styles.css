@@ -406,6 +406,29 @@ html[data-theme="retro"] .hero h1::after {
     gap: 1rem;
     flex-wrap: wrap;
     margin-top: 2.5rem;
+    align-items: center;
+}
+
+.icon-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius);
+    color: var(--muted);
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.icon-link svg {
+    width: 22px;
+    height: 22px;
+}
+
+.icon-link:hover,
+.icon-link:focus-visible {
+    color: var(--accent);
+    transform: translateY(-3px);
 }
 
 .btn {
