@@ -3,40 +3,27 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
-TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
-cp wasm/flags/main.go "$TMP/"
-cp public/data/flags.json "$TMP/"
-printf 'module flags\n\ngo 1.23\n' > "$TMP/go.mod"
+BINARIES=""
+if command -v wasm-opt >/dev/null 2>&1; then
+  BINARIES=""
+elif [ -x /opt/homebrew/opt/binaryen/bin/wasm-opt ]; then
+  BINARIES=/opt/homebrew/opt/binaryen/bin
+fi
 
-cd "$TMP"
-if command -v tinygo >/dev/null 2>&1; then
-  tinygo build -o "$ROOT/public/data/flags.wasm" -target wasm -opt z .
+if command -v cargo >/dev/null 2>&1 && rustup target list --installed 2>/dev/null | grep -q wasm32-unknown-unknown; then
+  cd wasm
+  cargo build --release -p flags --target wasm32-unknown-unknown
+  cp target/wasm32-unknown-unknown/release/flags.wasm "$ROOT/public/data/flags.wasm"
   cd "$ROOT"
-  cp "$(tinygo env TINYGOROOT)/targets/wasm_exec.js" public/wasm_exec.js
-  echo "Built public/data/flags.wasm with TinyGo ($(du -h public/data/flags.wasm | cut -f1 | tr -d ' '))"
-elif command -v go >/dev/null 2>&1; then
-  cd "$TMP"
-  GOOS=js GOARCH=wasm go build -o "$ROOT/public/data/flags.wasm" .
-  cd "$ROOT"
-  GLUE=""
-  for p in "$(go env GOROOT)/lib/wasm/wasm_exec.js" "$(go env GOROOT)/misc/wasm/wasm_exec.js"; do
-    if [ -f "$p" ]; then
-      GLUE="$p"
-      break
-    fi
-  done
-  if [ -z "$GLUE" ]; then
-    echo "error: wasm_exec.js not found under GOROOT ($(go env GOROOT))" >&2
-    exit 1
+  if [ -n "$BINARIES" ]; then
+    "$BINARIES/wasm-opt" -Oz -o public/data/flags.wasm public/data/flags.wasm
   fi
-  cp "$GLUE" public/wasm_exec.js
-  echo "Built public/data/flags.wasm with Go ($(du -h public/data/flags.wasm | cut -f1 | tr -d ' '))"
+  echo "Built public/data/flags.wasm with Rust ($(wc -c < public/data/flags.wasm | tr -d ' ') bytes)"
 else
-  if [ -f public/data/flags.wasm ] && [ -f public/wasm_exec.js ]; then
-    echo "no go/tinygo found - keeping committed flags.wasm"
+  if [ -f public/data/flags.wasm ]; then
+    echo "cargo/rust wasm target not found - keeping committed flags.wasm"
     exit 0
   fi
-  echo "error: no go or tinygo found and no prebuilt flags.wasm exists" >&2
+  echo "error: cargo with wasm32-unknown-unknown not found and no prebuilt flags.wasm exists" >&2
   exit 1
 fi

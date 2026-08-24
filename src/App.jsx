@@ -18,27 +18,15 @@ export default function App() {
     let cancelled = false;
     const boot = async () => {
       try {
-        await new Promise((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = `${import.meta.env.BASE_URL}wasm_exec.js`;
-          s.onload = resolve;
-          s.onerror = () => reject(new Error("wasm_exec.js failed to load"));
-          document.head.appendChild(s);
-        });
-        const go = new window.Go();
         const bytes = await (
           await fetch(`${import.meta.env.BASE_URL}data/flags.wasm`)
         ).arrayBuffer();
-        const { instance } = await WebAssembly.instantiate(bytes, go.importObject);
-        go.run(instance);
-        let waited = 0;
-        while (!window.__getFlags && waited < 5000) {
-          await new Promise((r) => setTimeout(r, 10));
-          waited += 10;
-        }
-        if (!window.__getFlags) throw new Error("__getFlags not registered");
-        const data = JSON.parse(window.__getFlags());
-        if (!cancelled) setFlags({ ...DEFAULT_FLAGS, ...data });
+        const { instance } = await WebAssembly.instantiate(bytes);
+        const e = instance.exports;
+        const json = new TextDecoder().decode(
+          new Uint8Array(e.memory.buffer, e.get_flags_ptr(), e.get_flags_len())
+        );
+        if (!cancelled) setFlags({ ...DEFAULT_FLAGS, ...JSON.parse(json) });
       } catch {
         if (!cancelled) setFlags(DEFAULT_FLAGS);
       }
