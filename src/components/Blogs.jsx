@@ -15,6 +15,7 @@ export default function Blogs({ onBack }) {
   const [failed, setFailed] = useState(false);
   const [year, setYear] = useState("all");
   const [tag, setTag] = useState("all");
+  const [active, setActive] = useState(null);
 
   useEffect(() => {
     if (blogCache) return;
@@ -48,6 +49,22 @@ export default function Blogs({ onBack }) {
     );
   }, [posts, year, tag]);
 
+  const openPost = (post) => {
+    setActive(post);
+    window.scrollTo({ top: 0 });
+    fetch(`${import.meta.env.BASE_URL}data/posts/${post.slug}.html`)
+      .then((res) => {
+        if (!res.ok) throw new Error(res.status);
+        return res.text();
+      })
+      .then((html) => {
+        setActive((cur) => (cur && cur.slug === post.slug ? { ...cur, html } : cur));
+      })
+      .catch(() => {
+        setActive((cur) => (cur && cur.slug === post.slug ? { ...cur, failed: true } : cur));
+      });
+  };
+
   if (failed) {
     return (
       <main id="content" className="container">
@@ -60,6 +77,43 @@ export default function Blogs({ onBack }) {
     return (
       <main id="content" className="container">
         <p className="state">Loading…</p>
+      </main>
+    );
+  }
+
+  if (active) {
+    return (
+      <main id="content" className="container post-page">
+        <a
+          href="#top"
+          className="back-link"
+          onClick={(e) => {
+            e.preventDefault();
+            setActive(null);
+          }}
+        >
+          ← Back to archive
+        </a>
+
+        <article className="post">
+          <div className="blog-meta">
+            <time dateTime={active.date}>{formatDate(active.date)}</time>
+            {active.readTime && <span>{active.readTime}</span>}
+          </div>
+          <h2>{active.title}</h2>
+          <ul className="chips">
+            {active.tags.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          {active.failed ? (
+            <p className="state">Could not load this post.</p>
+          ) : active.html ? (
+            <div className="prose post-body" dangerouslySetInnerHTML={{ __html: active.html }} />
+          ) : (
+            <p className="state">Loading…</p>
+          )}
+        </article>
       </main>
     );
   }
@@ -111,7 +165,11 @@ export default function Blogs({ onBack }) {
 
       <div className="blog-list">
         {filtered.map((post) => (
-          <article className="card blog-item" key={post.title}>
+          <article
+            className="card blog-item blog-link"
+            key={post.slug}
+            onClick={() => openPost(post)}
+          >
             <div className="blog-meta">
               <time dateTime={post.date}>{formatDate(post.date)}</time>
               <span>{post.readTime}</span>

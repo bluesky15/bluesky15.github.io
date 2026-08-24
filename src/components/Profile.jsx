@@ -32,7 +32,7 @@ function LinkedinIcon() {
   );
 }
 
-export default function Profile({ profile, failed }) {
+export default function Profile({ profile, failed, flags }) {
   if (failed) {
     return (
       <main id="content" className="container">
@@ -92,9 +92,11 @@ export default function Profile({ profile, failed }) {
           <p className="hero-line">I architect mobile products end to end.</p>
           <p className="tagline">{profile.tagline}</p>
           <div className="hero-actions">
-            <a className="btn btn-fill" href={resumeUrl} target="_blank" rel="noopener noreferrer">
-              Resume ↓
-            </a>
+            {flags.resume && (
+              <a className="btn btn-fill" href={resumeUrl} target="_blank" rel="noopener noreferrer">
+                Resume ↓
+              </a>
+            )}
             {email && (
               <a className="btn" href={`mailto:${email}`}>
                 Get In Touch

@@ -1,0 +1,23 @@
+<p>Server-driven UI (SDUI) promises the holy grail of mobile development: ship layout changes without waiting for app review. On the Tila platform we adopted SDUI for high-frequency surfaces like campaigns and home feeds, and Compose turned out to be the perfect rendering engine.</p>
+<h2>The schema</h2>
+<p>We modeled every screen as a tree of typed components. Each node carries a <code>type</code>, versioned props, and optional children:</p>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;section&quot;,
+  &quot;v&quot;: 2,
+  &quot;children&quot;: [
+    { &quot;type&quot;: &quot;banner&quot;, &quot;image&quot;: &quot;...&quot;, &quot;action&quot;: &quot;app://product/123&quot; },
+    { &quot;type&quot;: &quot;carousel&quot;, &quot;items&quot;: [] }
+  ]
+}
+</code></pre>
+<p>The client maintains a registry mapping <code>type</code> to a composable. Unknown types render nothing — but log loudly.</p>
+<h2>Versioning and fallbacks</h2>
+<p>The hard part isn&#39;t rendering; it&#39;s evolution. Our rules:</p>
+<ol>
+<li>New fields must be optional forever</li>
+<li>Renaming a field requires a new type version</li>
+<li>Every client understands at least N-2 schema versions</li>
+</ol>
+<p>When the parser meets an unknown or malformed node, it falls back to a native default section instead of dropping the whole screen.</p>
+<h2>What we&#39;d do differently</h2>
+<p>Crash rate halved and campaign launch time went from weeks to minutes. But if we started again, we would invest earlier in a design-token layer so server payloads reference semantic styles rather than raw colors — theming retroactively was painful.</p>

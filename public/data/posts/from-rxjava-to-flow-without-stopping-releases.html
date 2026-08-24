@@ -1,0 +1,23 @@
+<p>Nobody gives you a quarter to rewrite reactive infrastructure. When we moved a mature Android codebase from RxJava 2 to Kotlin Flow, we shipped it as a background refactor across six release cycles while product kept landing features.</p>
+<h2>Strangler fig, not big bang</h2>
+<p>The rule was simple: no file may add new Rx code, but existing Rx code is not rewritten unless touched anyway. New code uses Flow from day one; old code migrates opportunistically.</p>
+<h2>The interop layer</h2>
+<p>Two extensions did 90% of the heavy lifting:</p>
+<pre><code class="language-kotlin">fun &lt;T&gt; Observable&lt;T&gt;.asFlow(): Flow&lt;T&gt; =
+    callbackFlow {
+        val disposable = subscribe(
+            { value -&gt; trySend(value) },
+            { error -&gt; close(error) },
+            { close() }
+        )
+        awaitClose { disposable.dispose() }
+    }
+</code></pre>
+<p>And the mirror image for Flow back into Observable at legacy boundaries. Keeping both worlds compiling meant we could migrate a module per sprint instead of freezing the app.</p>
+<h2>What actually broke</h2>
+<ul>
+<li><code>Subjects</code> have no direct Flow equivalent — hot flows via <code>SharedFlow</code> required redesigning a few event buses</li>
+<li>Error handling changed shape: <code>onErrorReturn</code> became <code>catch</code>, and swallowed exceptions surfaced weeks later</li>
+<li>Threading assumptions: Rx schedulers vs dispatcher injection leaked into tests</li>
+</ul>
+<p>Six months later the last Observable import was deleted. No feature freeze, no emergency releases — just a linter rule that got stricter every sprint.</p>

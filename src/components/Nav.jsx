@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 
-export default function Nav({ theme, setTheme, view, onNavigate }) {
+export default function Nav({ theme, setTheme, view, onNavigate, flags }) {
   const [loginOpen, setLoginOpen] = useState(false);
   const [user, setUser] = useState(null);
 
@@ -10,7 +10,7 @@ export default function Nav({ theme, setTheme, view, onNavigate }) {
     ["skills", "Skills"],
     ["experience", "Experience"],
     ["projects", "Projects"],
-    ["blogs", "Blogs"],
+    ...(flags.blogs ? [["blogs", "Blogs"]] : []),
   ];
 
   const handleClick = (e, id) => {
@@ -44,32 +44,37 @@ export default function Nav({ theme, setTheme, view, onNavigate }) {
               </a>
             );
           })}
-          <a
-            href="/resume.pdf"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="nav-cta"
-          >
-            Resume
-          </a>
-          {user ? (
-            <button type="button" className="theme-toggle" onClick={() => setUser(null)}>
-              logout ({user})
-            </button>
-          ) : (
-            <button type="button" className="theme-toggle" onClick={() => setLoginOpen(true)}>
-              login
+          {flags.resume && (
+            <a
+              href="/resume.pdf"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nav-cta"
+            >
+              Resume
+            </a>
+          )}
+          {flags.login &&
+            (user ? (
+              <button type="button" className="theme-toggle" onClick={() => setUser(null)}>
+                logout ({user})
+              </button>
+            ) : (
+              <button type="button" className="theme-toggle" onClick={() => setLoginOpen(true)}>
+                login
+              </button>
+            ))}
+          {flags.themeToggle && (
+            <button
+              type="button"
+              className="theme-toggle"
+              aria-pressed={theme === "retro"}
+              title="Toggle theme"
+              onClick={() => setTheme((t) => (t === "retro" ? "modern" : "retro"))}
+            >
+              {theme === "retro" ? "modern_ui" : "retro_crt"}
             </button>
           )}
-          <button
-            type="button"
-            className="theme-toggle"
-            aria-pressed={theme === "retro"}
-            title="Toggle theme"
-            onClick={() => setTheme((t) => (t === "retro" ? "modern" : "retro"))}
-          >
-            {theme === "retro" ? "modern_ui" : "retro_crt"}
-          </button>
         </nav>
 
         {loginOpen &&
