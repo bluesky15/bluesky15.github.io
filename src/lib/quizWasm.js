@@ -59,3 +59,42 @@ export async function convertCsvToJsonViaWasm(csvText) {
   const jsonText = new TextDecoder().decode(new Uint8Array(e.memory.buffer, outPtr, outLen2));
   return JSON.parse(jsonText);
 }
+
+// WASM pulls relevant CSV slice by query param (1..12 or quiz_id string)
+// e.g. getFilteredQuizViaWasm(1) => general (10 rows), getFilteredQuizViaWasm('science') => science
+export async function getFilteredQuizViaWasm(param) {
+  const e = await loadQuizWasm();
+  const num = Number(param)
+  if (!Number.isNaN(num) && Number.isInteger(num) && num >= 1 && num <= 12) {
+    e.get_filtered_json_by_index(num)
+    const outPtr = e.get_out_ptr()
+    const outLen = e.get_out_len()
+    return JSON.parse(new TextDecoder().decode(new Uint8Array(e.memory.buffer, outPtr, outLen)))
+  }
+  // string id
+  const str = String(param)
+  const bytes = new TextEncoder().encode(str)
+  const heapBase = e.__heap_base?.value ?? e.__heap_base ?? 50000
+  const ptr = (typeof heapBase === 'number' ? heapBase : 50000) + 8000
+  if (e.memory.buffer.byteLength < ptr + bytes.length) {
+    const need = ptr + bytes.length - e.memory.buffer.byteLength
+    e.memory.grow(Math.ceil(need / 65536))
+  }
+  new Uint8Array(e.memory.buffer).set(bytes, ptr)
+  e.get_filtered_json_by_id(ptr, bytes.length)
+  const outPtr = e.get_out_ptr()
+  const outLen = e.get_out_len()
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(e.memory.buffer, outPtr, outLen)))
+}
+
+// Convenience: fetch via real API server (which itself uses WASM)
+export async function fetchQuizApi(param = null, raw = false) {
+  const base = import.meta.env.BASE_URL
+  // Build URL: /api/quiz=1  or /api/quiz?quiz=1
+  const url = param == null
+    ? `${base}api/quiz.json${raw ? '?raw=1' : ''}`
+    : `${base}api/quiz=${encodeURIComponent(param)}${raw ? '&raw=1' : ''}`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}

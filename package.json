@@ -6,8 +6,11 @@
   "scripts": {
     "blogs": "node scripts/build-posts.mjs",
     "wasm": "bash scripts/build-wasm.sh",
+    "clean": "rm -rf dist",
+    "clean:public": "rm -rf public/data public/api",
+    "clean:all": "rm -rf dist public/data public/api",
     "dev": "npm run blogs && npm run wasm && vite",
-    "build": "npm run blogs && npm run wasm && vite build",
+    "build": "npm run clean && npm run blogs && npm run wasm && vite build",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

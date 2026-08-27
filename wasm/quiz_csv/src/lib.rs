@@ -214,6 +214,70 @@ pub extern "C" fn get_out_len() -> usize {
     unsafe { OUT_LEN }
 }
 
+// Filtered converter: pull relevant quiz by 1-based index (1..12)
+// e.g. 1=general, 2=science ... 12=food. Out via get_out_ptr/len
+const ORDER: [&str; 12] = [
+    "general", "science", "maths", "history", "geography", "space",
+    "sports", "movies", "music", "technology", "animals", "food",
+];
+
+fn csv_to_json_filtered_by_quiz_id(csv: &[u8], wanted: &str) -> Vec<u8> {
+    let rows = parse_csv(csv);
+    if rows.is_empty() { return b"[]".to_vec(); }
+    let header = &rows[0];
+    let mut out = Vec::with_capacity(4096);
+    out.push(b'[');
+    let mut first = true;
+    for row in rows.iter().skip(1) {
+        if row.len() < header.len() { continue; }
+        if row[0] != wanted { continue; }
+        let quiz_id = &row[0];
+        let position: usize = row[1].parse().unwrap_or(0);
+        let question = &row[2];
+        let o1 = &row[3]; let o2 = &row[4]; let o3 = &row[5]; let o4 = &row[6];
+        let correct_index: usize = row[7].parse().unwrap_or(0);
+        let correct_answer = &row[8];
+        if !first { out.push(b','); }
+        first = false;
+        out.extend_from_slice(b"{\"quiz_id\":");
+        escape_json(quiz_id, &mut out);
+        out.extend_from_slice(b",\"position\":");
+        out.extend_from_slice(position.to_string().as_bytes());
+        out.extend_from_slice(b",\"question\":");
+        escape_json(question, &mut out);
+        out.extend_from_slice(b",\"options\":[");
+        escape_json(o1, &mut out); out.push(b',');
+        escape_json(o2, &mut out); out.push(b',');
+        escape_json(o3, &mut out); out.push(b',');
+        escape_json(o4, &mut out);
+        out.extend_from_slice(b"],\"correct_index\":");
+        out.extend_from_slice(correct_index.to_string().as_bytes());
+        out.extend_from_slice(b",\"correct_answer\":");
+        escape_json(correct_answer, &mut out);
+        out.push(b'}');
+    }
+    out.push(b']');
+    out
+}
+
+#[no_mangle]
+pub extern "C" fn get_filtered_json_by_index(idx: usize) -> usize {
+    if idx == 0 || idx > ORDER.len() {
+        unsafe { OUT_BUF = b"[]".to_vec(); OUT_LEN = 2; return OUT_LEN; }
+    }
+    let wanted = ORDER[idx - 1];
+    let json = csv_to_json_filtered_by_quiz_id(CSV_BYTES, wanted);
+    unsafe { OUT_BUF = json; OUT_LEN = OUT_BUF.len(); OUT_LEN }
+}
+
+#[no_mangle]
+pub extern "C" fn get_filtered_json_by_id(id_ptr: *const u8, id_len: usize) -> usize {
+    let slice = unsafe { core::slice::from_raw_parts(id_ptr, id_len) };
+    let wanted = core::str::from_utf8(slice).unwrap_or("");
+    let json = csv_to_json_filtered_by_quiz_id(CSV_BYTES, wanted);
+    unsafe { OUT_BUF = json; OUT_LEN = OUT_BUF.len(); OUT_LEN }
+}
+
 // Aliases for ergonomic JS use (also expose as get_flags-style for symmetry)
 #[no_mangle]
 pub extern "C" fn get_flags_ptr() -> *const u8 {
