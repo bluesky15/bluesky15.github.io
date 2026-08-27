@@ -4,12 +4,5 @@
   "version": "1.0.0",
   "environment": "production",
   "isSupabase": false,
-  "settings": {
-    "enabled": true,
-    "logLevel": "info"
-  },
-  "server": {
-    "host": "localhost",
-    "port": 3001
-  }
+  "isPullToRefresh":false
 }
