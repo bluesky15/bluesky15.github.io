@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "sling",
+  "version": "1.0.0",
+  "environment": "production",
+  "isSupabase": false,
+  "settings": {
+    "enabled": true,
+    "logLevel": "info"
+  },
+  "server": {
+    "host": "localhost",
+    "port": 3001
+  }
+}

@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 
 const CSV_PATH = join(process.cwd(), "quiz_csv_1.csv");
@@ -60,25 +60,69 @@ export function buildQuiz(src = CSV_PATH, outDir = join(process.cwd(), "public")
   const json = csvToJson(csvText);
   const jsonText = JSON.stringify(json, null, 2);
 
-  // Write canonical JSON
+  // Real API envelope (200 success) for static hosting (GitHub Pages has no vite middleware)
+  const envelope = {
+    status: 200,
+    success: true,
+    count: json.length,
+    source: 'wasm/quiz_csv csv_to_json',
+    data: json,
+  }
+  const envelopeText = JSON.stringify(envelope, null, 2)
+
+  // Write canonical JSON (raw) + envelope for data
   const dataDir = join(outDir, "data");
   ensureDir(dataDir);
   writeFileSync(join(dataDir, "quiz.json"), jsonText, "utf8");
+  // also keep csvs for generic WASM pull (handled by vite middleware via convert_csv_to_json)
+  // Ensure csvs folder exists for static hosting
+  const csvsDir = join(dataDir, "csvs");
+  ensureDir(csvsDir);
+  // Copy all quiz_csv_*.csv to public/data/csvs/ if present
+  try {
+    const csvs = readdirSync(process.cwd()).filter(f => /^quiz_csv_\d+\.csv$/.test(f))
+    for (const f of csvs) copyFileSync(join(process.cwd(), f), join(csvsDir, f.replace('quiz_csv_', 'quiz_').replace('.csv','.csv')))
+    // also handle quiz_csv_1.csv -> quiz_1.csv etc. already done via copyFile, ensure quiz_1.csv exists
+    if (existsSync(CSV_PATH) && !existsSync(join(csvsDir, 'quiz_1.csv'))) copyFileSync(CSV_PATH, join(csvsDir, 'quiz_1.csv'))
+  } catch {}
 
-  // Expose to /api/quiz=1 as requested (literal '=' in filename) + friendly aliases
+  // Expose to /api - static GitHub Pages serves .json with correct Content-Type
+  // /api/quiz.json and /api/quiz/1.json are correct (application/json)
+  // /api/quiz=1 has no extension -> GitHub Pages serves application/octet-stream (download) -> keep for dev middleware, but also provide _headers for Cloudflare
   const apiDir = join(outDir, "api");
   ensureDir(apiDir);
-  // literal file for /api/quiz=1 (vite serves public/api/quiz=1 at /api/quiz=1)
-  writeFileSync(join(apiDir, "quiz=1"), jsonText, "utf8");
-  // aliases: /api/quiz.json and /api/quiz/1 etc
-  writeFileSync(join(apiDir, "quiz.json"), jsonText, "utf8");
+  // For GitHub Pages, the real API is the envelope (200 success)
+  writeFileSync(join(apiDir, "quiz.json"), envelopeText, "utf8");
+  writeFileSync(join(apiDir, "quiz=1"), envelopeText, "utf8"); // dev: middleware overrides to correct type
   const apiQuizDir = join(apiDir, "quiz");
   ensureDir(apiQuizDir);
-  writeFileSync(join(apiQuizDir, "1.json"), jsonText, "utf8");
-  writeFileSync(join(apiQuizDir, "1"), jsonText, "utf8");
+  writeFileSync(join(apiQuizDir, "1.json"), envelopeText, "utf8");
+  writeFileSync(join(apiQuizDir, "1"), envelopeText, "utf8");
 
-  // Also write grouped by quiz_id for nicer API? Keep single file but log
-  console.log(`Built quiz JSON: ${json.length} records -> public/data/quiz.json & public/api/quiz=1`);
+  // Generate per-file envelopes for 2,3,4 if present (so /api/quiz?file=2 works statically via /api/quiz/2.json)
+  for (const n of [2,3,4]) {
+    const p = join(process.cwd(), `quiz_csv_${n}.csv`);
+    if (!existsSync(p)) continue
+    const txt = readFileSync(p, 'utf8')
+    const j = csvToJson(txt)
+    const env = JSON.stringify({ status:200, success:true, file:String(n), count:j.length, source:'wasm/quiz_csv', data:j }, null, 2)
+    writeFileSync(join(apiDir, `quiz_${n}.json`), env, "utf8");
+    writeFileSync(join(apiQuizDir, `${n}.json`), env, "utf8");
+    // also data/csvs already copied
+  }
+
+  // Cloudflare/_headers for extension-less file (dev preview already sets via middleware)
+  const headersPath = join(outDir, "_headers");
+  const headersContent = `/api/quiz=1
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-cache
+  Access-Control-Allow-Origin: *
+/api/quiz/*
+  Content-Type: application/json; charset=utf-8
+`;
+  try { writeFileSync(headersPath, headersContent, "utf8") } catch {}
+
+  console.log(`Built quiz JSON: ${json.length} records -> public/data/quiz.json & public/api/quiz.json (envelope) + public/data/csvs/`);
 
   return json;
 }
