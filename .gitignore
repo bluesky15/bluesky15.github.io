@@ -1,1 +1,34 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Build outputs
+dist/
+coverage/
+public/data/posts/
+public/data/blogs.json
+
+# WASM
 wasm/target/
+
+# Cache & OS
+.DS_Store
+Thumbs.db
+.cache/
+.parcel-cache/
+.vite/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# gh-pages cache (embedded repo)
+node_modules/.cache/gh-pages/
