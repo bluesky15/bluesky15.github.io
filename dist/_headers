@@ -1,6 +1,0 @@
-/api/quiz=1
-  Content-Type: application/json; charset=utf-8
-  Cache-Control: no-cache
-  Access-Control-Allow-Origin: *
-/api/quiz/*
-  Content-Type: application/json; charset=utf-8
