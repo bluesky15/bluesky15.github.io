@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "name": "splitmatic",
+  "version": "1.0.0",
+  "environment": "production",
+  "isAdOn": false
+}
