@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio &amp; Income Calculator</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --panel: #151b23;
+    --panel2: #1b232e;
+    --border: #2a3441;
+    --text: #e6edf3;
+    --muted: #8b98a9;
+    --green: #22c55e;
+    --red: #ef4444;
+    --blue: #38bdf8;
+    --amber: #f59e0b;
+    --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 1240px; margin: 0 auto; }
+
+  header { display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap; }
+  h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  .layout { display: grid; grid-template-columns: 320px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .card h2 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--muted); margin-bottom: 14px; font-weight: 600;
+  }
+
+  /* ---------- inputs ---------- */
+  .field { margin-bottom: 14px; }
+  .field label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 13px; color: var(--text); margin-bottom: 5px; font-weight: 500;
+  }
+  .field label .hint { color: var(--muted); font-size: 11px; }
+  .input-row { display: flex; align-items: center; gap: 8px; }
+  .input-row .unit {
+    color: var(--muted); font-size: 13px; min-width: 16px; text-align: center;
+  }
+  input[type="number"] {
+    width: 100%;
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    outline: none;
+    transition: border-color .15s;
+  }
+  input[type="number"]:focus { border-color: var(--blue); }
+  input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { opacity: 1; }
+
+  .seg {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    margin-top: 6px;
+  }
+  .seg button {
+    background: var(--panel2); color: var(--muted); border: none;
+    padding: 7px 0; font-size: 12.5px; cursor: pointer; font-weight: 500;
+  }
+  .seg button.active { background: #244a63; color: #fff; }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+  button.btn {
+    flex: 1; padding: 9px 0; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--panel2); color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer;
+  }
+  button.btn:hover { background: #232d3a; }
+  button.btn.primary { background: #17683b; border-color: #1d7f49; color: #fff; }
+  button.btn.primary:hover { background: #1a8045; }
+
+  /* ---------- results ---------- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-bottom: 14px;
+  }
+  .stat {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .stat .k { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 5px; }
+  .stat .v { font-size: 19px; font-weight: 700; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .stat .n { font-size: 11px; color: var(--muted); margin-top: 3px; }
+  .hero { border-left: 3px solid var(--green); }
+  .hero .v { color: var(--green); }
+
+  canvas#chart { width: 100%; height: 320px; display: block; border-radius: 8px; }
+
+  /* ---------- table ---------- */
+  .tbl-wrap { overflow-x: auto; margin-top: 16px; max-height: 380px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th {
+    position: sticky; top: 0; background: var(--panel2); z-index: 1;
+    text-align: right; padding: 8px 10px; color: var(--muted);
+    font-weight: 600; border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  th:first-child, td:first-child { text-align: left; }
+  td {
+    padding: 7px 10px; text-align: right; border-bottom: 1px solid #212a35;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; white-space: nowrap;
+  }
+  tr:hover td { background: #1d2530; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  .depleted { color: var(--red); font-weight: 600; }
+
+  .note { color: var(--muted); font-size: 11.5px; margin-top: 14px; line-height: 1.55; }
+  .note b { color: var(--text); }
+
+  .warn {
+    display: none; margin-top: 12px; padding: 10px 12px; border-radius: 8px;
+    background: #3b1d1d; border: 1px solid #6b2b2b; color: #fca5a5; font-size: 12.5px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>📊 Portfolio &amp; Income Calculator</h1>
+    <span class="sub">Initial investment · monthly income % · monthly new investment · monthly withdrawal % · yearly tax · total income</span>
+    <span class="sub" style="margin-left:auto"><a href="https://onlinelkb.in/" style="color:var(--blue);text-decoration:none">← onlinelkb.in</a></span>
+  </header>
+
+  <div class="layout">
+    <!-- ============ INPUTS ============ -->
+    <div class="card">
+      <h2>Inputs</h2>
+
+      <div class="field">
+        <label>Investment Period <span class="hint" id="periodHint">120 months</span></label>
+        <div class="input-row">
+          <input type="number" id="years" value="10" min="0" max="60" step="1">
+          <span class="unit">yr</span>
+          <input type="number" id="months" value="0" min="0" max="11" step="1">
+          <span class="unit">mo</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Initial Investment <span class="hint">lump sum</span></label>
+        <div class="input-row">
+          <span class="unit">₹</span>
+          <input type="number" id="initial" value="1000000" min="0" step="1000">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Monthly Income % <span class="hint" id="annualHint">≈ 12.68% / yr (compounded)</span></label>
+        <div class="input-row">
+          <input type="number" id="monthlyRate" value="1.0" min="-100" max="100" step="0.05" style="text-align:right">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Monthly New Investment <span class="hint">added every month</span></label>
+        <div class="input-row">
+          <span class="unit">₹</span>
+          <input type="number" id="monthlyInvest" value="10000" min="0" step="500">
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Monthly Withdrawal <span class="hint" id="wdHint">% of portfolio each month</span></label>
+        <div class="input-row">
+          <input type="number" id="monthlyWithdraw" value="0.5" min="0" max="100" step="0.05" style="text-align:right">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Tax Rate <span class="hint">cut once per year on profit</span></label>
+        <div class="input-row">
+          <input type="number" id="taxRate" value="10" min="0" max="100" step="0.5" style="text-align:right">
+          <span class="unit">%</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn primary" onclick="recalc(true)">↻ Recalculate</button>
+        <button class="btn" onclick="resetDefaults()">Reset</button>
+      </div>
+
+      <div class="warn" id="depletedWarn"></div>
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div>
+      <div class="cards">
+        <div class="stat hero"><div class="k">Total Income (Gross)</div><div class="v" id="stGross">–</div><div class="n" id="stGrossN"></div></div>
+        <div class="stat"><div class="k">Income After Tax</div><div class="v pos" id="stNet">–</div><div class="n" id="stNetN"></div></div>
+        <div class="stat"><div class="k">Final Portfolio</div><div class="v" id="stFinal">–</div><div class="n" id="stFinalN"></div></div>
+        <div class="stat"><div class="k">Total Invested</div><div class="v" id="stInvested">–</div><div class="n" id="stInvestedN"></div></div>
+        <div class="stat"><div class="k">Total Withdrawn</div><div class="v" id="stWithdrawn">–</div><div class="n" id="stWithdrawnN"></div></div>
+        <div class="stat"><div class="k">Total Tax Paid</div><div class="v neg" id="stTax">–</div><div class="n" id="stTaxN"></div></div>
+      </div>
+
+      <div class="card">
+        <h2>Portfolio Growth</h2>
+        <canvas id="chart"></canvas>
+        <div class="note">
+          <b>How it works:</b> every month the portfolio first earns the <b>monthly income %</b> on the opening balance,
+          then a fixed <b>monthly withdrawal %</b> of the current portfolio value is taken, and then the
+          <b>monthly new investment</b> is added.
+          The <b>tax</b> is cut once per year at each year-end, on that year's total profit.
+          The <span style="color:var(--blue)">blue line</span> is what you actually put in — the gap between it and the
+          <span style="color:var(--green)">green line</span> is your profit.
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h2>Yearly Breakdown</h2>
+        <div class="tbl-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Year</th><th>Opening</th><th>New Investment</th><th>Gross Income</th>
+                <th>Tax</th><th>Withdrawn</th><th>Closing</th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const fmtInr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
+const money = v => (v < 0 ? "−₹" + fmtInr.format(Math.abs(Math.round(v))) : "₹" + fmtInr.format(Math.round(v)));
+function shortMoney(v) {
+  const a = Math.abs(v), s = v < 0 ? "−" : "";
+  if (a >= 1e7) return s + "₹" + (a / 1e7).toFixed(2) + " Cr";
+  if (a >= 1e5) return s + "₹" + (a / 1e5).toFixed(2) + " L";
+  if (a >= 1e3) return s + "₹" + (a / 1e3).toFixed(1) + " K";
+  return s + "₹" + Math.round(a);
+}
+const num = id => parseFloat(document.getElementById(id).value) || 0;
+
+function resetDefaults() {
+  document.getElementById("years").value = 10;
+  document.getElementById("months").value = 0;
+  document.getElementById("initial").value = 1000000;
+  document.getElementById("monthlyRate").value = 1.0;
+  document.getElementById("monthlyInvest").value = 10000;
+  document.getElementById("monthlyWithdraw").value = 0.5;
+  document.getElementById("taxRate").value = 10;
+  recalc(true);
+}
+
+/* ================= SIMULATION ================= */
+function simulate() {
+  const totalMonths = Math.max(1, Math.min(720, Math.round(num("years") * 12 + num("months"))));
+  const initial = Math.max(0, num("initial"));
+  const r = num("monthlyRate") / 100;              // monthly income %
+  const mInvest = Math.max(0, num("monthlyInvest"));
+  const wPct = Math.min(100, Math.max(0, num("monthlyWithdraw"))) / 100;   // withdrawal % of portfolio
+  const taxRate = Math.min(1, Math.max(0, num("taxRate") / 100));
+
+  const pts = [];         // per-month series for the chart
+  const years = [];       // per-year rows for the table
+  let bal = initial;
+  let cumInvested = initial, cumWithdrawn = 0, cumGross = 0, cumTax = 0;
+  let yOpening = initial, yInvested = 0, yGross = 0, yTax = 0, yWd = 0, yCount = 1;
+  let depleted = null;
+
+  pts.push({ m: 0, balance: bal, invested: cumInvested, withdrawn: cumWithdrawn, gross: 0 });
+
+  for (let m = 1; m <= totalMonths; m++) {
+    const gain = bal * r;                    // income on opening balance
+    bal += gain;
+    cumGross += gain; yGross += gain;
+
+    // ---- tax: deducted once per year, on that year's profit ----
+    let tax = 0;
+    if (m % 12 === 0 && yGross > 0) tax = yGross * taxRate;
+    bal -= tax; cumTax += tax; yTax += tax;
+
+    // ---- monthly withdrawal: fixed % of current portfolio value ----
+    let wd = bal * wPct;
+    bal -= wd;
+    cumWithdrawn += wd; yWd += wd;
+
+    // ---- new investment ----
+    bal += mInvest; cumInvested += mInvest; yInvested += mInvest;
+
+    if (depleted === null && cumGross > 0 && bal <= 0) depleted = m;
+    if (bal < 0) bal = 0;
+
+    pts.push({ m, balance: bal, invested: cumInvested, withdrawn: cumWithdrawn, gross: gain - tax });
+    if (m % 12 === 0 || m === totalMonths) {
+      years.push({ y: yCount, opening: yOpening, invested: yInvested, gross: yGross, tax: yTax, wd: yWd, closing: bal });
+      yOpening = bal; yInvested = 0; yGross = 0; yTax = 0; yWd = 0; yCount++;
+    }
+  }
+
+  return { totalMonths, debatable: depleted, pts, years,
+           cumInvested, cumWithdrawn, cumGross, cumTax, final: bal, initial };
+}
+
+/* ================= RENDER ================= */
+function recalc(showHero) {
+  const N = num("years") * 12 + num("months");
+  document.getElementById("periodHint").textContent = N + " month" + (N === 1 ? "" : "s");
+  const mr = num("monthlyRate");
+  document.getElementById("annualHint").textContent =
+    "≈ " + (((1 + mr / 100) ** 12 - 1) * 100).toFixed(2) + "% / yr (compounded)";
+  const wv = num("monthlyWithdraw");
+  document.getElementById("wdHint").textContent = wv > 0
+    ? "= " + ((1 - (1 - wv / 100) ** 12) * 100).toFixed(2) + "% of portfolio / yr"
+    : "% of portfolio each month · 0 = none";
+
+  const R = simulate();
+  const net = R.cumGross - R.cumTax;
+  const profit = R.cumWithdrawn + R.final - R.cumInvested;
+
+  // compact display (K / L / Cr) with exact value underneath
+  const sm = shortMoney;
+  const pct = net + R.cumTax > 0 ? ((R.cumTax / (R.cumTax + net)) * 100).toFixed(1) : "0";
+  document.getElementById("stGross").textContent = sm(R.cumGross);
+  document.getElementById("stGrossN").textContent = money(R.cumGross) + " total gains";
+  document.getElementById("stNet").textContent = sm(net);
+  document.getElementById("stNetN").textContent = money(net) + " kept after tax";
+  document.getElementById("stFinal").textContent = sm(R.final);
+  document.getElementById("stFinalN").textContent = money(R.final) + " incl. initial";
+  document.getElementById("stInvested").textContent = sm(R.cumInvested);
+  document.getElementById("stInvestedN").textContent = money(R.initial) + " initial + " + money(R.cumInvested - R.initial) + " monthly";
+  document.getElementById("stWithdrawn").textContent = sm(R.cumWithdrawn);
+  document.getElementById("stWithdrawnN").textContent = money(R.cumWithdrawn) +
+    " · avg " + money(R.totalMonths ? R.cumWithdrawn / R.totalMonths : 0) + " / month";
+  document.getElementById("stTax").textContent = sm(R.cumTax);
+  document.getElementById("stTaxN").textContent = money(R.cumTax) + " yearly cut · " + pct + "% of income";
+
+  // net-worth verdict line under cards (reuse table note area)
+  const warn = document.getElementById("depletedWarn");
+  if (R.debatable !== null) {
+    warn.style.display = "block";
+    warn.textContent = "⚠ Portfolio fully depleted in month " + R.debatable +
+                       " — monthly withdrawals exceed returns + investments after that point.";
+  } else warn.style.display = "none";
+
+  renderTable(R, profit);
+  drawChart(R);
+}
+
+function renderTable(R, profit) {
+  const tb = document.getElementById("tbody");
+  let html = "";
+  for (const y of R.years) {
+    html += `<tr>
+      <td>${y.y}</td>
+      <td title="${money(y.opening)}">${shortMoney(y.opening)}</td>
+      <td class="pos" title="${money(y.invested)}">${y.invested ? "+" + shortMoney(y.invested) : "–"}</td>
+      <td class="${y.gross >= 0 ? "pos" : "neg"}" title="${money(y.gross)}">${shortMoney(y.gross)}</td>
+      <td class="neg" title="${money(y.tax)}">${y.tax ? "−" + shortMoney(y.tax) : "–"}</td>
+      <td title="${money(y.wd)}">${y.wd ? shortMoney(y.wd) : "–"}</td>
+      <td title="${money(y.closing)}"><b>${shortMoney(y.closing)}</b></td>
+    </tr>`;
+  }
+  html += `<tr style="border-top:2px solid var(--border)">
+      <td><b>Net</b></td>
+      <td>–</td>
+      <td class="pos" title="${money(R.cumInvested - R.initial)}">+${shortMoney(R.cumInvested - R.initial)}</td>
+      <td class="pos" title="${money(R.cumGross)}">${shortMoney(R.cumGross)}</td>
+      <td class="neg" title="${money(R.cumTax)}">−${shortMoney(R.cumTax)}</td>
+      <td title="${money(R.cumWithdrawn)}">${shortMoney(R.cumWithdrawn)}</td>
+      <td title="${money(profit)}"><b>${shortMoney(profit)}</b> <span style="color:var(--muted)">profit</span></td>
+    </tr>`;
+  tb.innerHTML = html;
+}
+
+/* ================= CHART (plain canvas, offline) ================= */
+let chartData = null, hoverIdx = -1;
+const cvs = document.getElementById("chart");
+const ctx = cvs.getContext("2d");
+
+function drawChart(R) {
+  chartData = R;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cvs.getBoundingClientRect();
+  cvs.width = rect.width * dpr; cvs.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const W = rect.width, H = rect.height;
+  const padL = 58, padR = 14, padT = 14, padB = 28;
+  const iw = W - padL - padR, ih = H - padT - padB;
+
+  ctx.clearRect(0, 0, W, H);
+  const n = R.pts.length;
+  const maxV = Math.max(...R.pts.map(p => Math.max(p.balance, p.invested)), 100) * 1.06;
+
+  const x = m => padL + (n <= 1 ? 0 : (m / (n - 1)) * iw);
+  const y = v => padT + ih - (v / maxV) * ih;
+
+  // grid + y labels
+  ctx.font = "10px ui-monospace, Menlo"; ctx.fillStyle = "#8b98a9";
+  ctx.strokeStyle = "#212a35"; ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const v = maxV * i / 5, yy = y(v);
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(W - padR, yy); ctx.stroke();
+    ctx.textAlign = "right"; ctx.fillText(shortMoney(v), padL - 6, yy + 3);
+  }
+  // x labels: each year
+  ctx.textAlign = "center";
+  const yearStep = Math.max(1, Math.ceil((n - 1) / 12 / 12) * 12 || 12);
+  for (let m = 0; m < n - 1; m += yearStep) ctx.fillText("Y" + Math.round(m / 12), x(m), H - 8);
+  ctx.fillText("Y" + Math.round((n - 1) / 12), x(n - 1), H - 8);
+
+  // area under portfolio line
+  const grad = ctx.createLinearGradient(0, padT, 0, padT + ih);
+  grad.addColorStop(0, "rgba(34,197,94,0.28)"); grad.addColorStop(1, "rgba(34,197,94,0.02)");
+  const series = (key, color, width, dash) => {
+    ctx.beginPath(); ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = width;
+    R.pts.forEach((p, i) => i ? ctx.lineTo(x(p.m), y(p[key])) : ctx.moveTo(x(p.m), y(p[key])));
+    ctx.stroke(); ctx.setLineDash([]);
+  };
+  ctx.beginPath(); ctx.moveTo(x(0), y(0));
+  R.pts.forEach(p => ctx.lineTo(x(p.m), y(p.balance)));
+  ctx.lineTo(x(n - 1), y(0)); ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+  series("balance", "#22c55e", 2);
+  series("invested", "#38bdf8", 1.5, [5, 4]);
+
+  // hover
+  if (hoverIdx >= 0 && hoverIdx < n) {
+    const p = R.pts[hoverIdx], hx = x(p.m), hy = y(p.balance);
+    ctx.strokeStyle = "#38bdf8"; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(hx, padT); ctx.lineTo(hx, padT + ih); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = "#22c55e"; ctx.beginPath(); ctx.arc(hx, hy, 4, 0, 7); ctx.fill();
+    ctx.strokeStyle = "#0d1117"; ctx.stroke();
+
+    // tooltip box
+    const lines = [
+      ["Month  " + hoverIdx, null],
+      ["Portfolio  " + money(p.balance), null],
+      ["Invested   " + money(p.invested), null],
+      ["Withdrawn  " + money(p.withdrawn), null],
+    ];
+    ctx.font = "11px ui-monospace, Menlo";
+    const bw = 168, bh = 62;
+    let bx = hx + 12; if (bx + bw > W - 4) bx = hx - bw - 12;
+    let by = Math.min(Math.max(hy - bh / 2, 6), H - bh - 6);
+    ctx.fillStyle = "rgba(21,27,35,0.96)"; ctx.strokeStyle = "#2a3441";
+    roundRect(bx, by, bw, bh, 7); ctx.fill(); ctx.stroke();
+    ctx.textAlign = "left";
+    lines.forEach((l, i) => { ctx.fillStyle = i ? "#e6edf3" : "#8b98a9"; ctx.fillText(l[0], bx + 10, by + 15 + i * 13); });
+  }
+
+  // legend
+  ctx.textAlign = "left"; ctx.font = "11px -apple-system, sans-serif";
+  ctx.fillStyle = "#22c55e"; ctx.fillRect(padL, 4, 14, 3); ctx.fillText("Portfolio value", padL + 20, 9);
+  ctx.fillStyle = "#38bdf8"; ctx.fillRect(padL + 130, 4, 14, 3);
+  ctx.fillText("Money you invested", padL + 150, 9);
+}
+function roundRect(x0, y0, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x0 + r, y0);
+  ctx.arcTo(x0 + w, y0, x0 + w, y0 + h, r);
+  ctx.arcTo(x0 + w, y0 + h, x0, y0 + h, r);
+  ctx.arcTo(x0, y0 + h, x0, y0, r);
+  ctx.arcTo(x0, y0, x0 + w, y0, r);
+  ctx.closePath();
+}
+
+cvs.addEventListener("mousemove", e => {
+  if (!chartData) return;
+  const rect = cvs.getBoundingClientRect();
+  const px = e.clientX - rect.left;
+  const padL = 58, padR = 14;
+  const iw = rect.width - padL - padR;
+  let m = Math.round(((px - padL) / iw) * (chartData.pts.length - 1));
+  m = Math.max(0, Math.min(chartData.pts.length - 1, m));
+  if (m !== hoverIdx) { hoverIdx = m; drawChart(chartData); }
+});
+cvs.addEventListener("mouseleave", () => { hoverIdx = -1; if (chartData) drawChart(chartData); });
+window.addEventListener("resize", () => { if (chartData) drawChart(chartData); });
+
+/* live recalculation */
+document.querySelectorAll("input[type=number]").forEach(el =>
+  el.addEventListener("input", () => recalc(false)));
+
+recalc(true);
+</script>
+</body>
+</html>
