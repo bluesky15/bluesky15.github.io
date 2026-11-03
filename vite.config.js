@@ -3,6 +3,37 @@ import react from '@vitejs/plugin-react'
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+// Dev/preview: serve public/portfolio-calculator/index.html for the directory URL.
+// Vite's SPA fallback rewrites /portfolio-calculator/ to the root index.html,
+// so the nav "Calculator" link would open the portfolio app instead.
+function calculatorHtmlMiddleware() {
+  const candidates = [
+    join(process.cwd(), 'public', 'portfolio-calculator', 'index.html'),
+    join(process.cwd(), 'dist', 'portfolio-calculator', 'index.html'),
+  ]
+  const handler = (req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next()
+    const url = (req.url || '').split('?')[0].replace(/\/+$/, '') || '/'
+    const match = url === '/portfolio-calculator' || url === '/portfolio-calculator/index.html'
+    if (!match) return next()
+    const file = candidates.find(p => existsSync(p))
+    if (!file) return next()
+    res.statusCode = 200
+    res.setHeader('Content-Type', 'text/html; charset=utf-8')
+    res.setHeader('Cache-Control', 'no-cache')
+    res.end(readFileSync(file, 'utf8'))
+  }
+  return {
+    name: 'calculator-html-middleware',
+    configureServer(server) {
+      server.middlewares.use(handler)
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(handler)
+    },
+  }
+}
+
 // Real API: WASM pulls relevant CSV based on query param `1` (e.g. /api/quiz=1, /api/quiz?quiz=1, /api/quiz/1)
 // Each request instantiates wasm/quiz_csv which embeds quiz_csv_1.csv and calls
 // get_filtered_json_by_index / get_filtered_json_by_id to serve filtered JSON.
@@ -266,7 +297,7 @@ function quizApiMiddleware() {
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react(), quizApiMiddleware()],
+  plugins: [calculatorHtmlMiddleware(), react(), quizApiMiddleware()],
   base: "./",
   server: {open: true,
     port: 3001,
