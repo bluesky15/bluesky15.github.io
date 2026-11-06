@@ -3,7 +3,10 @@
  *
  * Attached routes (see wrangler.toml):
  *   onlinelkb.in/login          -> login form + D1 credential check
- *   onlinelkb.in/hello          -> gated admin app: notes + image upload + selectable date
+ *   onlinelkb.in/hello          -> gated admin app:
+ *                                   left pane = note composer (date/note/image)
+ *                                   right pane = live preview + saved notes;
+ *                                   clicking any image opens a full-size lightbox
  *   onlinelkb.in/logout         -> clears session
  *   onlinelkb.in/api/entries*   -> JSON API (list/create/delete entries, gated)
  *   onlinelkb.in/img/*          -> gated image serving from Workers KV
@@ -12,7 +15,7 @@
  *
  * Storage:
  *   D1 (env.DB): users (PBKDF2 hashes) + entries (note/date/image_key)
- *   KV (env.MEDIA): uploaded image bytes, key metadata.contentType
+ *   KV (env.MEDIA): uploaded image bytes, metadata.contentType
  *
  * Sessions are HMAC-signed cookies "username.expiryMs.signature".
  * Credentials/kv ids never live in this repo; see worker/schema.sql and
@@ -121,7 +124,7 @@ async function handleLogin(request, env) {
   return Response.redirect(`${origin}/login?error=1`, 303);
 }
 
-/* ---------------- entries API ---------------- */
+/* ---------------- entries API (unchanged) ---------------- */
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -257,69 +260,100 @@ const adminPage = (username) => page(`<!doctype html>
   <meta name="robots" content="noindex" />
   <title>Private tools · onlinelkb.in</title>
   <style>
-    body { margin:0; font-family:system-ui,sans-serif; background:#0f172a; color:#e2e8f0; padding:32px 16px 64px; }
-    .wrap { max-width:960px; margin:0 auto; text-align:center; }
-    h1 { font-size:28px; margin:0 0 6px; }
-    .sub { color:#94a3b8; margin:0 0 28px; font-size:14px; }
+    body { margin:0; font-family:system-ui,sans-serif; background:#0f172a; color:#e2e8f0; padding:28px 16px 56px; }
+    .app { max-width:1180px; margin:0 auto; }
+    .top { text-align:center; margin-bottom:22px; }
+    .top h1 { font-size:26px; margin:0 0 6px; }
+    .sub { color:#94a3b8; font-size:14px; margin:0; }
     .sub a { color:#38bdf8; }
-    form { background:#1e293b; border-radius:12px; padding:24px; margin:0 auto 12px;
-           display:grid; grid-template-columns:1.2fr .8fr; gap:16px; max-width:880px; text-align:left; }
-    .fields { display:grid; gap:12px; align-content:start; }
+    .layout { display:grid; grid-template-columns:390px minmax(0,1fr); gap:22px; align-items:start; }
+    .panel { background:#1e293b; border-radius:14px; padding:20px; }
+    .composer { position:sticky; top:16px; }
+    .panel h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; margin:0 0 16px; }
+    .fields { display:grid; gap:12px; }
     label { font-size:13px; color:#cbd5e1; display:grid; gap:4px; }
     input, textarea { padding:8px 10px; border-radius:8px; border:1px solid #475569;
                       background:#0f172a; color:#e2e8f0; font:inherit; font-size:14px; width:100%; box-sizing:border-box; }
-    textarea { min-height:120px; resize:vertical; }
-    button { padding:10px 14px; border-radius:8px; border:0; background:#38bdf8; color:#0f172a;
-             font-weight:600; cursor:pointer; }
-    .preview-wrap { display:grid; gap:8px; align-content:start; }
-    .preview-box { border:1px dashed #475569; border-radius:8px; min-height:120px; display:grid; place-items:center; overflow:hidden; }
-    .preview-box img { max-width:100%; max-height:240px; display:block; }
-    .preview-hint { color:#64748b; font-size:12px; margin:0; }
-    #status { font-size:14px; min-height:1.2em; margin:0 0 24px; color:#94a3b8; }
-    .entry-card { background:#1e293b; border-radius:12px; padding:18px; margin:0 auto 14px;
-                  display:grid; grid-template-columns:1.2fr .8fr; gap:16px; max-width:880px; text-align:left; list-style:none; }
-    .entry-card.no-image { grid-template-columns:1fr; }
-    .entry-note-col { min-width:0; }
-    .entry-head { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:14px; color:#cbd5e1; margin-bottom:8px; }
+    textarea { min-height:150px; resize:vertical; line-height:1.5; }
+    button.primary { padding:10px 14px; border-radius:8px; border:0; background:#38bdf8; color:#0f172a;
+                     font-weight:600; cursor:pointer; }
+    .hint { color:#64748b; font-size:12px; margin:4px 0 0; }
+    #status { font-size:14px; min-height:1.2em; margin:12px 0 0; color:#94a3b8; }
+    .pending { border:1px dashed #475569; border-radius:10px; padding:14px; margin-bottom:18px; }
+    .pending-date { font-size:13px; font-weight:600; color:#cbd5e1; }
+    .pending-note { white-space:pre-wrap; margin:8px 0 0; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
+    .pending-frame { margin:12px 0 0; }
+    .pending-frame img { display:block; max-width:100%; max-height:320px; border-radius:8px; margin:0 auto; }
+    .badge { display:inline-block; font-size:11px; color:#64748b; border:1px solid #334155; padding:2px 8px;
+             border-radius:999px; margin-bottom:10px; }
+    .entries { display:grid; gap:12px; }
+    .entry-card { background:#263449; border-radius:10px; padding:14px 16px; list-style:none; }
+    .entry-head { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px;
+                  color:#cbd5e1; margin-bottom:6px; }
     .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 4px; }
-    .entry-note { white-space:pre-wrap; margin:0; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
-    .entry-note.muted { color:#64748b; font-size:13px; }
-    .entry-preview { display:grid; align-items:start; }
-    .entry-img { max-width:100%; max-height:420px; border-radius:8px; justify-self:end; }
-    .empty { color:#64748b; font-size:14px; }
-    .empty.no-image { grid-template-columns:1fr; }
-    @media (max-width:720px) {
-      form, .entry-card { grid-template-columns:1fr; }
-      .entry-img { justify-self:start; }
-    }
+    .viewer-note { white-space:pre-wrap; margin:6px 0 10px; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
+    .viewer-note.muted { color:#64748b; font-size:13px; }
+    .entry-thumb { display:block; width:100%; max-width:340px; max-height:240px; object-fit:cover;
+                   border-radius:8px; cursor:zoom-in; }
+    .zoomhint { color:#64748b; font-size:12px; margin:6px 0 0; }
+    .viewer-foot { color:#64748b; font-size:13px; margin-top:16px; }
+    #lightbox { position:fixed; inset:0; background:rgba(2,6,23,.94); z-index:50;
+                display:grid; place-items:center; cursor:zoom-out; }
+    #lightbox img { max-width:94vw; max-height:86vh; width:auto; height:auto; object-fit:contain;
+                    border-radius:6px; box-shadow:0 12px 48px rgba(0,0,0,.65); }
+    .lightbar { position:fixed; bottom:18px; left:0; right:0; display:flex; gap:16px; justify-content:center;
+                font-size:13px; color:#cbd5e1; }
+    .lightbar a { color:#38bdf8; text-decoration:none; }
+    [hidden] { display:none !important; }
+    @media (max-width:880px) { .layout { grid-template-columns:1fr; } .composer { position:static; } }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <h1>Private tools</h1>
-    <p class="sub">Signed in as <strong>${username}</strong> 👋 · <a href="/logout">log out</a></p>
-    <form id="entry-form">
-      <div class="fields">
-        <label>Date
-          <input id="entry_date" name="entry_date" type="date" required />
-        </label>
-        <label>Note
-          <textarea id="note" name="note" maxlength="5000" placeholder="Write something…"></textarea>
-        </label>
-        <label>Image (optional, max 15MB)
-          <input id="image" name="image" type="file" accept="image/*" />
-        </label>
-        <button type="submit">Save entry</button>
-      </div>
-      <div class="preview-wrap">
-        <div class="preview-box" id="preview-wrap" hidden>
-          <img id="preview-img" alt="preview of selected image" />
+  <div class="app">
+    <div class="top">
+      <h1>Private tools</h1>
+      <p class="sub">Signed in as <strong>${username}</strong> 👋 · <a href="/logout">log out</a></p>
+    </div>
+    <div class="layout">
+      <section class="panel composer" id="composer-panel">
+        <h2>New entry</h2>
+        <form id="entry-form" class="fields">
+          <label>Date
+            <input id="entry_date" name="entry_date" type="date" required />
+          </label>
+          <label>Note
+            <textarea id="note" name="note" maxlength="5000" placeholder="Write something…"></textarea>
+          </label>
+          <label>Image (optional, max 15MB)
+            <input id="image" name="image" type="file" accept="image/*" />
+          </label>
+          <button class="primary" type="submit">Save entry</button>
+          <p class="hint">Pick a past date to backdate, or leave as today.</p>
+        </form>
+        <p id="status" aria-live="polite"></p>
+      </section>
+      <section class="panel" id="viewer-panel">
+        <h2>Preview &amp; saved notes</h2>
+        <div class="pending" id="pending" hidden>
+          <span class="badge">preview — not saved yet</span>
+          <div class="pending-date" id="pending-date"></div>
+          <p class="pending-note" id="pending-note"></p>
+          <div class="pending-frame" id="pending-frame" hidden>
+            <img id="pending-img" alt="preview of selected image" />
+          </div>
         </div>
-        <p class="preview-hint" id="preview-hint">Preview of the selected image appears here.</p>
-      </div>
-    </form>
-    <p id="status" aria-live="polite"></p>
-    <ul id="entries" style="padding:0;margin:0"></ul>
+        <ul class="entries" id="entries" style="padding:0;margin:0"></ul>
+        <p class="viewer-foot">Click any image to view it in full size.</p>
+      </section>
+    </div>
+  </div>
+  <div id="lightbox" hidden>
+    <img id="lightbox-img" alt="full size image" />
+    <div class="lightbar">
+      <span id="lightbox-date"></span>
+      <a id="lightbox-original" href="#" target="_blank" rel="noopener noreferrer">open original ↗</a>
+      <span>click anywhere or press Esc to close</span>
+    </div>
   </div>
   <script>
     (function () {
@@ -333,67 +367,121 @@ const adminPage = (username) => page(`<!doctype html>
       var today = now.getFullYear() + "-" +
         String(now.getMonth() + 1).padStart(2, "0") + "-" +
         String(now.getDate()).padStart(2, "0");
-      $("entry_date").value = today;
 
-      var fileEl = $("image"), pv = $("preview-img"), pvWrap = $("preview-wrap");
-      var pvUrl = null;
-      fileEl.addEventListener("change", function () {
+      var dateEl = $("entry_date"), noteEl = $("note"), fileEl = $("image");
+      var pend = $("pending"), pendDate = $("pending-date"), pendNote = $("pending-note");
+      var pendFrame = $("pending-frame"), pendImg = $("pending-img");
+      var lightbox = $("lightbox"), lightImg = $("lightbox-img"), lightDate = $("lightbox-date");
+      var lightOriginal = $("lightbox-original");
+      dateEl.value = today;
+
+      var objectUrl = null;
+      function updatePending() {
+        var d = dateEl.value, n = noteEl.value.trim();
         var f = fileEl.files && fileEl.files[0];
-        if (pvUrl) { URL.revokeObjectURL(pvUrl); pvUrl = null; }
-        if (f) { pvUrl = URL.createObjectURL(f); pv.src = pvUrl; pvWrap.hidden = false; }
-        else { pv.removeAttribute("src"); pvWrap.hidden = true; }
-      });
+        var show = (!!n) || (!!f) || d !== today;
+        pend.hidden = !show;
+        if (!show) return;
+        pendDate.textContent = "📅 " + d;
+        pendNote.textContent = n || "(no note — image only)";
+        if (f) {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          objectUrl = URL.createObjectURL(f);
+          pendImg.src = objectUrl;
+          pendFrame.hidden = false;
+        } else {
+          pendImg.removeAttribute("src");
+          pendFrame.hidden = true;
+        }
+      }
+      noteEl.addEventListener("input", updatePending);
+      dateEl.addEventListener("input", updatePending);
+      fileEl.addEventListener("change", updatePending);
+
+      function resetComposer() {
+        noteEl.value = "";
+        fileEl.value = "";
+        dateEl.value = today;
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = null;
+        updatePending();
+      }
 
       $("entry-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var status = $("status");
         status.textContent = "Saving…";
         var fd = new FormData();
-        fd.append("entry_date", $("entry_date").value);
-        fd.append("note", $("note").value);
+        fd.append("entry_date", dateEl.value);
+        fd.append("note", noteEl.value);
         if (fileEl.files && fileEl.files[0]) fd.append("image", fileEl.files[0]);
         fetch("/api/entries", { method: "POST", body: fd })
-          .then(function (res) { return res.json().then(function (d) { return { s: res.status, d: d }; }); })
+          .then(function (res) {
+            return res.json().then(function (d) { return { s: res.status, d: d }; });
+          })
           .then(function (r) {
             if (r.s !== 200 || !r.d.ok) throw new Error(r.d.error || "Save failed");
             status.textContent = "Saved ✓";
-            $("note").value = ""; fileEl.value = "";
-            if (pvUrl) { URL.revokeObjectURL(pvUrl); pvUrl = null; }
-            pvWrap.hidden = true;
+            resetComposer();
             return loadEntries();
           })
           .catch(function (err) { status.textContent = err.message || "Save failed"; });
       });
 
       function cardHtml(e) {
-        var hasImg = !!e.image_key;
-        return '<li class="entry-card' + (hasImg ? "" : " no-image") + '">' +
-          '<div class="entry-note-col">' +
-            '<div class="entry-head"><span>📅 ' + esc(e.entry_date) + "</span>" +
-              '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button></div>' +
-            (e.note ? '<p class="entry-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</p>"
-                    : '<p class="entry-note muted">(no note)</p>') +
-          "</div>" +
-          (hasImg ? '<div class="entry-preview"><img loading="lazy" src="/img/' +
-                    encodeURIComponent(e.image_key) + '" alt="entry image" class="entry-img"></div>' : "") +
+        var url = "/img/" + encodeURIComponent(e.image_key);
+        return '<li class="entry-card">' +
+          '<div class="entry-head"><span>📅 ' + esc(e.entry_date) + "</span>" +
+            '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button></div>' +
+          (e.note ? '<div class="viewer-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</div>"
+                  : '<div class="viewer-note muted">(no note)</div>') +
+          '<img class="entry-thumb" loading="lazy" data-key="' + esc(e.image_key) +
+            '" data-date="' + esc(e.entry_date) + '" src="' + url + '" alt="entry image">' +
+          '<p class="zoomhint">click image to view full size</p>' +
           "</li>";
       }
 
       function loadEntries() {
+        $("status").textContent = "";
         return fetch("/api/entries")
-          .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error()); })
+          .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("load failed")); })
           .then(function (data) {
             var items = (data && data.entries) || [];
             $("entries").innerHTML = items.length
               ? items.map(cardHtml).join("")
-              : '<li class="entry-card empty">No entries yet — use the form above.</li>';
+              : '<li class="entry-card"><div class="viewer-note muted">No entries yet — write your first note on the left.</div></li>';
           })
           .catch(function () {
-            $("entries").innerHTML = '<li class="entry-card empty">Could not load entries.</li>';
+            $("entries").innerHTML =
+              '<li class="entry-card"><div class="viewer-note muted">Could not load entries.</div></li>';
           });
       }
 
+      function openLightbox(key, date) {
+        var url = "/img/" + encodeURIComponent(key);
+        lightImg.src = url;
+        lightDate.textContent = "📅 " + date;
+        lightOriginal.href = url;
+        lightbox.hidden = false;
+        document.body.style.overflow = "hidden";
+      }
+      function closeLightbox() {
+        lightbox.hidden = true;
+        lightImg.removeAttribute("src");
+        lightOriginal.removeAttribute("href");
+        document.body.style.overflow = "";
+      }
+      lightbox.addEventListener("click", closeLightbox);
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !lightbox.hidden) closeLightbox();
+      });
+
       $("entries").addEventListener("click", function (e) {
+        var img = e.target.closest("[data-key]");
+        if (img) {
+          openLightbox(img.getAttribute("data-key"), img.getAttribute("data-date"));
+          return;
+        }
         var btn = e.target.closest("[data-del]");
         if (!btn) return;
         if (!confirm("Delete this entry?")) return;
@@ -450,8 +538,8 @@ export default {
       return serveImage(request, env);
     }
 
-    // Catch-all: not normally reachable via zone routes; staging uses env.ASSETS,
-    // the live deployment passes through to the origin (GitHub Pages).
+    // Catch-all: staging serves static assets via env.ASSETS; the live deployment
+    // passes through to the origin (GitHub Pages).
     return env.ASSETS ? env.ASSETS.fetch(request) : fetch(request);
   },
 };
