@@ -3,6 +3,12 @@ main = "src/index.js"
 compatibility_date = "2025-11-01"
 workers_dev = true
 
+# Page templates (worker/src/pages/*.html) are imported as strings
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
 # Staging = same login code as the live worker (source of truth: worker/src/index.js)
 # serving the current static build (run `npm run build` first) with worker handled
 # routes. Asset-matching paths (/, /assets/*, /data/*) are served directly by the
