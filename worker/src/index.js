@@ -422,11 +422,14 @@ const adminPage = (username) => page(`<!doctype html>
   <style>
     body { margin:0; font-family:system-ui,sans-serif; background:#0f172a; color:#e2e8f0; padding:28px 16px 56px; }
     .app { max-width:1180px; margin:0 auto; }
-    .top { text-align:center; margin-bottom:18px; }
-    .top h1 { font-size:26px; margin:0 0 6px; }
-    .sub { color:#94a3b8; font-size:14px; margin:0; }
-    .sub a { color:#38bdf8; }
-    nav.tabs { display:flex; justify-content:center; gap:10px; margin-bottom:22px; }
+    .topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+              background:#1e293b; border-radius:12px; padding:10px 16px; margin-bottom:20px; }
+    .topbar .brand { font-size:18px; font-weight:600; margin:0; }
+    .topbar .tab { padding:8px 18px; font-size:13px; }
+    .who { margin-left:auto; font-size:13px; color:#94a3b8; }
+    .who strong { color:#e2e8f0; font-weight:600; }
+    .who a { color:#f87171; text-decoration:none; }
+    .who a:hover { text-decoration:underline; }
     .tab { background:#1e293b; border:1px solid #475569; color:#94a3b8; padding:10px 24px;
            border-radius:999px; font-size:14px; cursor:pointer; font-family:inherit; }
     .tab:hover { color:#e2e8f0; }
@@ -484,6 +487,8 @@ const adminPage = (username) => page(`<!doctype html>
     .lightbar a { color:#38bdf8; text-decoration:none; }
     [hidden] { display:none !important; }
     @media (max-width:880px) {
+      .topbar { gap:8px; padding:8px 12px; }
+      .topbar .brand { font-size:16px; }
       .notes-layout { grid-template-columns:1fr; }
       .note-list { max-height:44vh; }
     }
@@ -491,15 +496,14 @@ const adminPage = (username) => page(`<!doctype html>
 </head>
 <body>
   <div class="app">
-    <div class="top">
-      <h1>Private tools</h1>
-      <p class="sub">Signed in as <strong>${username}</strong> 👋 · <a href="/logout">log out</a></p>
-    </div>
-
-    <nav class="tabs" role="tablist" aria-label="Private tools sections">
-      <button type="button" class="tab active" id="tab-compose" role="tab" aria-selected="true">＋ New entry</button>
-      <button type="button" class="tab" id="tab-notes" role="tab" aria-selected="false">My notes</button>
-    </nav>
+    <header class="topbar">
+      <h1 class="brand">Private tools</h1>
+      <nav class="tabs" role="tablist" aria-label="Private tools sections">
+        <button type="button" class="tab active" id="tab-compose" role="tab" aria-selected="true">＋ New entry</button>
+        <button type="button" class="tab" id="tab-notes" role="tab" aria-selected="false">My notes</button>
+      </nav>
+      <span class="who">Signed in as <strong>${username}</strong> 👋 · <a href="/logout">log out</a></span>
+    </header>
 
     <section id="view-compose">
       <div class="panel narrow" id="composer-panel">
