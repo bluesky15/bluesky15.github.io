@@ -16,4 +16,8 @@ binding = "DB"
 database_name = "lkb-auth"
 database_id = "5d1f8e81-2085-4886-8b41-ffede7a5a9d6"
 
+[[kv_namespaces]]
+binding = "MEDIA"
+id = "f1d4e647dd76490f98afc831a2d513c7"
+
 # [vars] intentionally omitted; SESSION_SECRET set via wrangler secret put.
