@@ -2,13 +2,20 @@ name = "onlinelkb-login"
 main = "src/index.js"
 compatibility_date = "2025-11-01"
 
-# These three paths are handled by this Worker.
-# Every other path on the zone writes straight through to the existing
-# GitHub Pages origin — no DNS change, no hosting change.
+# Page templates (worker/src/pages/*.html) are imported as strings
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+# These three paths are handled by this Worker. Trailing * keeps requests with
+# query strings (?error=1 etc.) inside the worker — an exact pattern like
+# "onlinelkb.in/login" does NOT match "/login?query" and lets the request
+# fall through to the GitHub Pages origin (observed live, 404).
 routes = [
-  { pattern = "onlinelkb.in/login",  zone_name = "onlinelkb.in" },
-  { pattern = "onlinelkb.in/hello",  zone_name = "onlinelkb.in" },
-  { pattern = "onlinelkb.in/logout", zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/login*",  zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/hello*",  zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/logout*", zone_name = "onlinelkb.in" },
   { pattern = "onlinelkb.in/api/entries*", zone_name = "onlinelkb.in" },
   { pattern = "onlinelkb.in/img/*", zone_name = "onlinelkb.in" },
 ]
