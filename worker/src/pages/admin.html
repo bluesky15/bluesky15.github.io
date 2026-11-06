@@ -45,7 +45,16 @@
     .pending-frame img { display:block; max-width:100%; max-height:320px; border-radius:8px; margin:0 auto; }
     .notes-layout { display:grid; grid-template-columns:320px minmax(0,1fr); gap:20px; align-items:start; }
     .note-list { display:grid; gap:8px; max-height:calc(100vh - 240px); overflow-y:auto;
-                 padding-right:4px; margin:0; padding-top:2px; }
+                 padding-right:4px; margin:0; padding-top:2px;
+                 scrollbar-width:none; -ms-overflow-style:none; }
+    .note-list::-webkit-scrollbar { display:none; width:0; height:0; }
+    #pager { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap; margin-top:12px; }
+    #pager button { background:#263449; border:1px solid #334155; color:#cbd5e1; min-width:30px; height:30px;
+                    border-radius:8px; cursor:pointer; font-size:13px; font-family:inherit; padding:0 8px; }
+    #pager button:hover:not(:disabled) { border-color:#38bdf8; color:#e2e8f0; }
+    #pager button.active { background:#38bdf8; border-color:#38bdf8; color:#0f172a; font-weight:600; }
+    #pager button:disabled { opacity:.4; cursor:default; }
+    #pager .dots { color:#64748b; font-size:13px; }
     .note-item { text-align:left; background:#263449; border:1px solid transparent; border-radius:10px;
                  padding:12px 14px; cursor:pointer; display:grid; gap:4px; font-family:inherit; width:100%; }
     .note-item:hover { border-color:#334155; }
@@ -130,6 +139,7 @@
         <div class="panel">
           <h2 id="list-title">List</h2>
           <div class="note-list" id="note-list" role="listbox" aria-label="Saved notes"></div>
+          <nav id="pager" aria-label="Saved notes pages" hidden></nav>
         </div>
         <div class="panel" id="note-detail"></div>
       </div>
@@ -169,6 +179,7 @@
       var editingId = null, baseImageKey = null;
       var ENTRIES = [];
       var selectedId = null;
+      var PAGE_SIZE = 8, currentPage = 1;
       dateEl.value = today;
 
       /* ---------- tabs ---------- */
@@ -290,14 +301,60 @@
           "</button>";
       }
 
+      function clampPage(p) {
+        return Math.min(Math.max(1, p), Math.max(1, Math.ceil(ENTRIES.length / PAGE_SIZE)));
+      }
+      function pageOfIndex(idx) {
+        return Math.floor(idx / PAGE_SIZE) + 1;
+      }
+
       function renderList() {
-        var items = ENTRIES;
-        $("list-title").textContent = "List (" + items.length + ")";
-        $("tab-notes").textContent = "My notes (" + items.length + ")";
-        $("note-list").innerHTML = items.length
-          ? items.map(itemHtml).join("")
+        var total = ENTRIES.length;
+        currentPage = clampPage(currentPage);
+        var start = (currentPage - 1) * PAGE_SIZE;
+        var slice = ENTRIES.slice(start, start + PAGE_SIZE);
+        $("list-title").textContent = "List (" + total + ")";
+        $("tab-notes").textContent = "My notes (" + total + ")";
+        $("note-list").innerHTML = slice.length
+          ? slice.map(itemHtml).join("")
           : '<div class="muted" style="font-size:14px">No notes yet — create one from the New entry tab.</div>';
+        renderPager();
         highlightSelection();
+      }
+
+      // numbered pager under the list; hidden while everything fits on one page
+      function renderPager() {
+        var pages = Math.max(1, Math.ceil(ENTRIES.length / PAGE_SIZE));
+        var el = $("pager");
+        if (pages <= 1) { el.hidden = true; el.innerHTML = ""; return; }
+        var seq = [];
+        if (pages <= 9) {
+          for (var i = 1; i <= pages; i++) seq.push(i);
+        } else {
+          seq.push(1);
+          for (var p = Math.max(2, currentPage - 1); p <= Math.min(pages - 1, currentPage + 1); p++) seq.push(p);
+          seq.push(pages);
+          var collapsed = [], prev = 0;
+          for (var k = 0; k < seq.length; k++) {
+            if (seq[k] <= prev) continue;
+            if (seq[k] - prev > 1) collapsed.push("…");
+            collapsed.push(seq[k]);
+            prev = seq[k];
+          }
+          seq = collapsed;
+        }
+        var h = '<button type="button" data-page="' + (currentPage - 1) + '"' +
+          (currentPage === 1 ? " disabled" : "") + ' aria-label="previous page">‹</button>';
+        for (var j = 0; j < seq.length; j++) {
+          if (seq[j] === "…") { h += '<span class="dots">…</span>'; continue; }
+          h += '<button type="button" data-page="' + seq[j] + '"' +
+            (seq[j] === currentPage ? ' class="active" aria-current="page"' : "") +
+            ' aria-label="page ' + seq[j] + '">' + seq[j] + "</button>";
+        }
+        h += '<button type="button" data-page="' + (currentPage + 1) + '"' +
+          (currentPage === pages ? " disabled" : "") + ' aria-label="next page">›</button>';
+        el.hidden = false;
+        el.innerHTML = h;
       }
 
       function highlightSelection() {
@@ -330,8 +387,16 @@
       function selectNote(id) {
         if (id === undefined || id === null) return renderDetailEmpty();
         selectedId = Number(id);
+        var idx = -1;
+        for (var i = 0; i < ENTRIES.length; i++) {
+          if (Number(ENTRIES[i].id) === selectedId) { idx = i; break; }
+        }
+        if (idx >= 0 && pageOfIndex(idx) !== currentPage) {
+          currentPage = pageOfIndex(idx); // jump so the picked note is visible
+          renderList();
+        }
         highlightSelection();
-        var e = ENTRIES.filter(function (x) { return Number(x.id) === selectedId; })[0];
+        var e = idx >= 0 ? ENTRIES[idx] : null;
         $("note-detail").innerHTML = e ? detailHtml(e) : '<p class="viewer-note muted">Note not found.</p>';
         return null;
       }
@@ -362,6 +427,14 @@
       $("note-list").addEventListener("click", function (e) {
         var item = e.target.closest("[data-id]");
         if (item) selectNote(item.getAttribute("data-id"));
+      });
+
+      $("pager").addEventListener("click", function (e) {
+        var b = e.target.closest("[data-page]");
+        if (!b || b.disabled) return;
+        currentPage = clampPage(Number(b.getAttribute("data-page")));
+        renderList();
+        $("note-list").scrollTop = 0;
       });
 
       $("note-detail").addEventListener("click", function (e) {
