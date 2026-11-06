@@ -10,3 +10,8 @@ routes = [
   { pattern = "onlinelkb.in/hello",  zone_name = "onlinelkb.in" },
   { pattern = "onlinelkb.in/logout", zone_name = "onlinelkb.in" },
 ]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lkb-auth"
+database_id = "5d1f8e81-2085-4886-8b41-ffede7a5a9d6"

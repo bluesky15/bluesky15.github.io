@@ -1,0 +1,19 @@
+name = "lkb-staging"
+main = "src/index.js"
+compatibility_date = "2025-11-01"
+workers_dev = true
+
+# Staging = same login code as the live worker (source of truth: worker/src/index.js)
+# serving the current static build (run `npm run build` first) with worker handled
+# routes. Asset-matching paths (/, /assets/*, /data/*) are served directly by the
+# assets layer; non asset paths (/login, /hello, /logout) invoke the worker.
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lkb-auth"
+database_id = "5d1f8e81-2085-4886-8b41-ffede7a5a9d6"
+
+# [vars] intentionally omitted; SESSION_SECRET set via wrangler secret put.

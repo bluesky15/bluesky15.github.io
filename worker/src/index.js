@@ -1,21 +1,24 @@
 /**
- * Standalone Cloudflare Worker for onlinelkb.in — TEST build (no D1 yet).
+ * Standalone Cloudflare Worker for onlinelkb.in.
  *
  * Attached only to these routes (see wrangler.toml):
  *   onlinelkb.in/login   -> login form + credential check
  *   onlinelkb.in/hello   -> gated page, generated live by this worker
  *   onlinelkb.in/logout  -> clears session
  *
- * and set a signed session cookie. When SESSION_SECRET is unset (local dev)
- * FALLBACK_SECRET is used.
+ * Credentials live in D1 (binding DB) as salted PBKDF2-SHA-256 hashes
+ * (100k iterations, 32 bytes) — see worker/schema.sql and
+ * scripts/gen-admin-hash.mjs. No plaintext credentials in this repo.
+ *
+ * Sessions are HMAC-signed cookies: "username.expiryMs.signature",
+ * signed as HMAC-SHA256(username|expiry, SESSION_SECRET). The exp check
+ * is a fail-closed fallback; set SESSION_SECRET in prod (wrangler secret put).
  */
-
-const TEST_USER = "lkbneo";
-const TEST_PASSWORD = "lkbneo15";
 
 const COOKIE = "lkb_session";
 const TTL_MS = 24 * 60 * 60 * 1000; // 1 day while testing
 const FALLBACK_SECRET = "local-dev-secret";
+const USERNAME_RE = /^[A-Za-z0-9._-]{1,32}$/;
 
 const encoder = new TextEncoder();
 
@@ -26,7 +29,6 @@ const b2h = (buf) =>
 function bytesEqual(a, b) {
   return a.length === b.length && crypto.subtle.timingSafeEqual(a, b);
 }
-const equalStrings = (a, b) => bytesEqual(encoder.encode(a), encoder.encode(b));
 
 async function hmacHex(value, secret) {
   const key = await crypto.subtle.importKey(
@@ -39,16 +41,39 @@ async function hmacHex(value, secret) {
   return b2h(await crypto.subtle.sign("HMAC", key, encoder.encode(value)));
 }
 
-// cookie value: "<expiryMs>.<hmac(expiryMs)>"
+async function hashPassword(password, saltHex) {
+  const salt = Uint8Array.from(saltHex.match(/../g), (x) => parseInt(x, 16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: 100_000 },
+    key,
+    256,
+  );
+  return b2h(bits);
+}
+
+// cookie value: "<username>.<expiryMs>.<hmac(username|expiryMs)>" -> username or null
 async function readSession(request, env) {
   const raw = (request.headers.get("Cookie") || "")
     .split("; ")
     .find((c) => c.startsWith(COOKIE + "="));
-  if (!raw) return false;
-  const [exp, sig] = raw.slice(COOKIE.length + 1).split(".");
-  if (!exp || !sig || Number(exp) < Date.now()) return false;
+  if (!raw) return null;
+  const parts = raw.slice(COOKIE.length + 1).split(".");
+  if (parts.length !== 3) return null;
+  const [userRaw, exp, sig] = parts;
+  if (Number(exp) < Date.now()) return null;
+  const username = decodeURIComponent(userRaw);
   const secret = env.SESSION_SECRET ?? FALLBACK_SECRET;
-  return equalStrings(await hmacHex(`${COOKIE}|${exp}`, secret), sig);
+  if (!bytesEqual(encoder.encode(await hmacHex(`${username}|${exp}`, secret)), encoder.encode(sig))) {
+    return null;
+  }
+  return username;
 }
 
 async function handleLogin(request, env) {
@@ -57,19 +82,34 @@ async function handleLogin(request, env) {
   const password = String(form.get("password") || "");
   const { origin } = new URL(request.url);
 
-  if (!equalStrings(username, TEST_USER) || !equalStrings(password, TEST_PASSWORD)) {
-    return Response.redirect(`${origin}/login?error=1`, 303);
+  if (username && USERNAME_RE.test(username) && password) {
+    try {
+      const user = await env.DB
+        .prepare("SELECT username, salt, password_hash FROM users WHERE username = ?")
+        .bind(username)
+        .first();
+      if (user) {
+        const ok = bytesEqual(
+          encoder.encode(await hashPassword(password, user.salt)),
+          encoder.encode(user.password_hash),
+        );
+        if (ok) {
+          const exp = Date.now() + TTL_MS;
+          const sig = await hmacHex(`${username}|${exp}`, env.SESSION_SECRET ?? FALLBACK_SECRET);
+          return new Response(null, {
+            status: 302,
+            headers: {
+              Location: `${origin}/hello`,
+              "Set-Cookie": `${COOKIE}=${encodeURIComponent(username)}.${exp}.${sig}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${TTL_MS / 1000}`,
+            },
+          });
+        }
+      }
+    } catch {
+      // D1 error or hashing failure -> treat as a failed login, never as success
+    }
   }
-
-  const exp = Date.now() + TTL_MS;
-  const sig = await hmacHex(`${COOKIE}|${exp}`, env.SESSION_SECRET ?? FALLBACK_SECRET);
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: `${origin}/hello`,
-      "Set-Cookie": `${COOKIE}=${exp}.${sig}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${TTL_MS / 1000}`,
-    },
-  });
+  return Response.redirect(`${origin}/login?error=1`, 303);
 }
 
 const page = (body) =>
@@ -125,9 +165,8 @@ export default {
     }
 
     if (pathname === "/hello") {
-      return (await readSession(request, env))
-        ? helloPage(TEST_USER)
-        : Response.redirect(`${origin}/login`, 302);
+      const username = await readSession(request, env);
+      return username ? helloPage(username) : Response.redirect(`${origin}/login`, 302);
     }
 
     if (pathname === "/logout") {
@@ -141,6 +180,8 @@ export default {
     }
 
     // Catch-all: not normally reachable since routes only match /login, /hello, /logout.
-    return fetch(request); // fall through to the origin (GitHub Pages)
+    // env.ASSETS exists only in the staging deployment (worker-staging); on the live
+    // zone routes we pass through to the origin (GitHub Pages).
+    return env.ASSETS ? env.ASSETS.fetch(request) : fetch(request);
   },
 };
