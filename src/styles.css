@@ -783,6 +783,23 @@ html[data-theme="retro"] h2.numbered::before {
     text-decoration: none;
 }
 
+.footer-login {
+    text-align: center;
+    margin-top: 0.75rem;
+    padding-bottom: 2rem;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+}
+
+.footer-login a {
+    color: var(--muted);
+    text-decoration: none;
+}
+
+.footer-login a:hover {
+    color: var(--accent);
+}
+
 .blogs-page {
     padding-top: 2.5rem;
     padding-bottom: 5rem;

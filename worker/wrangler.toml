@@ -1,0 +1,12 @@
+name = "onlinelkb-login"
+main = "src/index.js"
+compatibility_date = "2025-11-01"
+
+# These three paths are handled by this Worker.
+# Every other path on the zone writes straight through to the existing
+# GitHub Pages origin — no DNS change, no hosting change.
+routes = [
+  { pattern = "onlinelkb.in/login",  zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/hello",  zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/logout", zone_name = "onlinelkb.in" },
+]

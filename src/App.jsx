@@ -90,6 +90,11 @@ export default function App() {
       ) : (
         <Profile profile={profile} failed={profileFailed} flags={flags} />
       )}
+      {flags.login && (
+        <p className="footer-login">
+          <a href="/login">login</a>
+        </p>
+      )}
     </>
   );
 }

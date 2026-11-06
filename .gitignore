@@ -42,3 +42,6 @@ pnpm-debug.log*
 
 # gh-pages cache - embedded git repo (caused warning)
 node_modules/.cache/gh-pages/
+
+# Cloudflare / wrangler local state
+.wrangler/

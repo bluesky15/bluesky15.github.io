@@ -91,7 +91,7 @@ describe("App", () => {
     });
     await mountApp();
     await screen.findByText("Blogs");
-    expect(screen.getByText("login")).toBeTruthy();
+    expect(screen.getAllByText("login").length).toBeGreaterThan(0);
     expect(screen.getByText("Resume ↓")).toBeTruthy();
     expect(screen.getByText("retro_crt")).toBeTruthy();
   });
@@ -100,7 +100,7 @@ describe("App", () => {
     stubEnvironment({ failWasm: true });
     await mountApp();
     await screen.findByText("Blogs");
-    expect(screen.getByText("login")).toBeTruthy();
+    expect(screen.getAllByText("login").length).toBeGreaterThan(0);
     expect(screen.getByText("Resume ↓")).toBeTruthy();
   });
 
