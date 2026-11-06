@@ -183,6 +183,69 @@ async function handleEntryCreate(request, env) {
   }
 }
 
+/*
+ * PUT semantics: entry_date + note are set; image resolved as
+ *   - new file provided  -> replace (new KV object, old one deleted after success)
+ *   - image_action=remove -> image_key NULL + KV object deleted
+ *   - otherwise          -> keep existing image
+ */
+async function handleEntryUpdate(request, env) {
+  try {
+    const id = Number(new URL(request.url).pathname.split("/").pop());
+    if (!Number.isInteger(id) || id <= 0) return json({ ok: false, error: "Bad id" }, 400);
+    const row = await env.DB.prepare("SELECT image_key FROM entries WHERE id = ?").bind(id).first();
+    if (!row) return json({ ok: false, error: "Not found" }, 404);
+
+    const form = await request.formData();
+    const entryDate = String(form.get("entry_date") || "").trim();
+    const note = String(form.get("note") || "").trim().slice(0, NOTE_MAX);
+    const imageAction = String(form.get("image_action") || "keep"); // "keep" | "remove"
+    const file = form.get("image");
+    const hasNewImage = file && typeof file === "object" && file.size > 0;
+
+    if (!DATE_RE.test(entryDate)) return json({ ok: false, error: "Invalid date" }, 400);
+    if (hasNewImage && file.size > MAX_IMG_BYTES) return json({ ok: false, error: "Image too large (max 15MB)" }, 413);
+
+    const removingImage = imageAction === "remove" && row.image_key;
+    if (!note && !hasNewImage && !removingImage && !row.image_key) {
+      return json({ ok: false, error: "Add a note or an image" }, 400);
+    }
+
+    let oldKey = row.image_key;
+    let newKey = row.image_key;
+    if (imageAction === "remove" && !hasNewImage) newKey = null;
+
+    if (hasNewImage) {
+      newKey = `img-${entryDate}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${imageExt(file.name, file.type)}`;
+      try {
+        await env.MEDIA.put(newKey, new Uint8Array(await file.arrayBuffer()), {
+          metadata: { contentType: file.type || "application/octet-stream" },
+        });
+      } catch (err) {
+        await env.MEDIA.delete(newKey).catch(() => {});
+        return json({ ok: false, error: "Image upload failed" }, 500);
+      }
+    }
+
+    try {
+      await env.DB
+        .prepare("UPDATE entries SET entry_date = ?, note = ?, image_key = ? WHERE id = ?")
+        .bind(entryDate, note, newKey, id)
+        .run();
+    } catch (err) {
+      if (hasNewImage) await env.MEDIA.delete(newKey).catch(() => {}); // DB unchanged, drop the new blob
+      return json({ ok: false, error: "Save failed" }, 500);
+    }
+
+    // DB committed: safe to delete the replaced KV object now
+    if (oldKey && oldKey !== newKey) await env.MEDIA.delete(oldKey).catch(() => {});
+
+    return json({ ok: true, entry: { id: id, entry_date: entryDate, note: note, image_key: newKey } });
+  } catch {
+    return json({ ok: false, error: "Invalid form data" }, 400);
+  }
+}
+
 async function handleEntryList(env) {
   try {
     const { results } = await env.DB
@@ -290,7 +353,11 @@ const adminPage = (username) => page(`<!doctype html>
     .entry-card { background:#263449; border-radius:10px; padding:14px 16px; list-style:none; }
     .entry-head { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px;
                   color:#cbd5e1; margin-bottom:6px; }
-    .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 4px; }
+    .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 6px; }
+    .entry-edit { background:none; border:0; color:#38bdf8; font-size:13px; cursor:pointer; padding:2px 6px; }
+    #cancel-edit { padding:10px 12px; border-radius:8px; border:1px solid #475569; background:transparent; color:#cbd5e1; cursor:pointer; }
+    .remove-tick { display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; }
+    .remove-tick input { width:auto; }
     .viewer-note { white-space:pre-wrap; margin:6px 0 10px; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
     .viewer-note.muted { color:#64748b; font-size:13px; }
     .entry-thumb { display:block; width:100%; max-width:340px; max-height:240px; object-fit:cover;
@@ -327,7 +394,13 @@ const adminPage = (username) => page(`<!doctype html>
           <label>Image (optional, max 15MB)
             <input id="image" name="image" type="file" accept="image/*" />
           </label>
-          <button class="primary" type="submit">Save entry</button>
+          <label class="remove-tick" id="remove-image-row" hidden>
+            <input id="remove-image" type="checkbox" />
+            remove the existing image
+          </label>
+          <button class="primary" id="submit-btn" type="submit">Save entry</button>
+          <button type="button" id="cancel-edit" hidden>Cancel</button>
+          <p class="hint" id="edit-hint" hidden>You are editing a saved note — saving replaces it.</p>
           <p class="hint">Pick a past date to backdate, or leave as today.</p>
         </form>
         <p id="status" aria-live="polite"></p>
@@ -373,17 +446,26 @@ const adminPage = (username) => page(`<!doctype html>
       var pendFrame = $("pending-frame"), pendImg = $("pending-img");
       var lightbox = $("lightbox"), lightImg = $("lightbox-img"), lightDate = $("lightbox-date");
       var lightOriginal = $("lightbox-original");
+      var pendBadge = pend.querySelector(".badge");
+      var submitBtn = $("submit-btn"), cancelBtn = $("cancel-edit");
+      var removeRow = $("remove-image-row"), removeChk = $("remove-image");
+      var editingId = null, baseImageKey = null;
+      var ENTRIES = [];
       dateEl.value = today;
 
       var objectUrl = null;
       function updatePending() {
         var d = dateEl.value, n = noteEl.value.trim();
         var f = fileEl.files && fileEl.files[0];
+        if (f && removeChk.checked) removeChk.checked = false; // picking a file means replace, not remove
+        removeRow.hidden = !(editingId && baseImageKey && !f);
+        pendBadge.textContent = "preview — " + (editingId ? "editing saved note" : "not saved yet");
         var show = (!!n) || (!!f) || d !== today;
         pend.hidden = !show;
         if (!show) return;
         pendDate.textContent = "📅 " + d;
-        pendNote.textContent = n || "(no note — image only)";
+        var removing = !!(editingId && removeChk.checked && baseImageKey && !f);
+        pendNote.textContent = n || (removing ? "(note empty — image will be removed)" : "(no note — image only)");
         if (f) {
           if (objectUrl) URL.revokeObjectURL(objectUrl);
           objectUrl = URL.createObjectURL(f);
@@ -398,6 +480,31 @@ const adminPage = (username) => page(`<!doctype html>
       dateEl.addEventListener("input", updatePending);
       fileEl.addEventListener("change", updatePending);
 
+      function exitEdit() {
+        editingId = null;
+        baseImageKey = null;
+        submitBtn.textContent = "Save entry";
+        cancelBtn.hidden = true;
+        removeRow.hidden = true;
+        removeChk.checked = false;
+        $("edit-hint").hidden = true;
+      }
+
+      function startEdit(entry) {
+        editingId = Number(entry.id);
+        baseImageKey = entry.image_key || null;
+        fileEl.value = "";
+        removeChk.checked = false;
+        dateEl.value = entry.entry_date;
+        noteEl.value = entry.note || "";
+        submitBtn.textContent = "Update entry";
+        cancelBtn.hidden = false;
+        $("edit-hint").hidden = false;
+        updatePending();
+        $("composer-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+        noteEl.focus();
+      }
+
       function resetComposer() {
         noteEl.value = "";
         fileEl.value = "";
@@ -407,6 +514,11 @@ const adminPage = (username) => page(`<!doctype html>
         updatePending();
       }
 
+      cancelBtn.addEventListener("click", function () {
+        exitEdit();
+        resetComposer();
+      });
+
       $("entry-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var status = $("status");
@@ -415,13 +527,16 @@ const adminPage = (username) => page(`<!doctype html>
         fd.append("entry_date", dateEl.value);
         fd.append("note", noteEl.value);
         if (fileEl.files && fileEl.files[0]) fd.append("image", fileEl.files[0]);
-        fetch("/api/entries", { method: "POST", body: fd })
+        fd.append("image_action", editingId && !fileEl.files[0] && removeChk.checked ? "remove" : "keep");
+        var url = editingId ? "/api/entries/" + editingId : "/api/entries";
+        fetch(url, { method: editingId ? "PUT" : "POST", body: fd })
           .then(function (res) {
             return res.json().then(function (d) { return { s: res.status, d: d }; });
           })
           .then(function (r) {
             if (r.s !== 200 || !r.d.ok) throw new Error(r.d.error || "Save failed");
             status.textContent = "Saved ✓";
+            exitEdit();
             resetComposer();
             return loadEntries();
           })
@@ -432,7 +547,8 @@ const adminPage = (username) => page(`<!doctype html>
         var url = "/img/" + encodeURIComponent(e.image_key);
         return '<li class="entry-card">' +
           '<div class="entry-head"><span>📅 ' + esc(e.entry_date) + "</span>" +
-            '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button></div>' +
+            '<span><button type="button" class="entry-edit" data-edit="' + esc(e.id) + '">edit</button>' +
+            '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button></span></div>' +
           (e.note ? '<div class="viewer-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</div>"
                   : '<div class="viewer-note muted">(no note)</div>') +
           '<img class="entry-thumb" loading="lazy" data-key="' + esc(e.image_key) +
@@ -447,6 +563,7 @@ const adminPage = (username) => page(`<!doctype html>
           .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("load failed")); })
           .then(function (data) {
             var items = (data && data.entries) || [];
+            ENTRIES = items;
             $("entries").innerHTML = items.length
               ? items.map(cardHtml).join("")
               : '<li class="entry-card"><div class="viewer-note muted">No entries yet — write your first note on the left.</div></li>';
@@ -480,6 +597,14 @@ const adminPage = (username) => page(`<!doctype html>
         var img = e.target.closest("[data-key]");
         if (img) {
           openLightbox(img.getAttribute("data-key"), img.getAttribute("data-date"));
+          return;
+        }
+        var editBtn = e.target.closest("[data-edit]");
+        if (editBtn) {
+          var target = ENTRIES.filter(function (x) {
+            return Number(x.id) === Number(editBtn.getAttribute("data-edit"));
+          })[0];
+          if (target) startEdit(target);
           return;
         }
         var btn = e.target.closest("[data-del]");
@@ -527,6 +652,7 @@ export default {
       const session = await readSession(request, env);
       if (!session) return json({ ok: false, error: "Unauthorized" }, 401);
       if (request.method === "POST") return handleEntryCreate(request, env);
+      if (request.method === "PUT") return handleEntryUpdate(request, env);
       if (request.method === "GET") return handleEntryList(env);
       if (request.method === "DELETE") return handleEntryDelete(request, env);
       return json({ ok: false, error: "Method not allowed" }, 405);
