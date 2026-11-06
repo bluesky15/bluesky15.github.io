@@ -3,12 +3,12 @@
  *
  * Attached routes (see wrangler.toml):
  *   onlinelkb.in/login          -> login form + D1 credential check
- *   onlinelkb.in/hello          -> gated admin app:
- *                                   left pane = note composer (date/note/image)
- *                                   right pane = live preview + saved notes;
- *                                   clicking any image opens a full-size lightbox
+ *   onlinelkb.in/hello          -> gated admin app
+ *                                 nav: [New entry] [My notes]
+ *                                 My notes = master-detail: list left, selected
+ *                                 note's text + image on the right
  *   onlinelkb.in/logout         -> clears session
- *   onlinelkb.in/api/entries*   -> JSON API (list/create/delete entries, gated)
+ *   onlinelkb.in/api/entries*   -> JSON API (list/create/update/delete, gated)
  *   onlinelkb.in/img/*          -> gated image serving from Workers KV
  *
  *     any other path -> GitHub Pages origin (zone routes own only the above)
@@ -124,7 +124,7 @@ async function handleLogin(request, env) {
   return Response.redirect(`${origin}/login?error=1`, 303);
 }
 
-/* ---------------- entries API (unchanged) ---------------- */
+/* ---------------- entries API ---------------- */
 
 const json = (data, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -325,14 +325,18 @@ const adminPage = (username) => page(`<!doctype html>
   <style>
     body { margin:0; font-family:system-ui,sans-serif; background:#0f172a; color:#e2e8f0; padding:28px 16px 56px; }
     .app { max-width:1180px; margin:0 auto; }
-    .top { text-align:center; margin-bottom:22px; }
+    .top { text-align:center; margin-bottom:18px; }
     .top h1 { font-size:26px; margin:0 0 6px; }
     .sub { color:#94a3b8; font-size:14px; margin:0; }
     .sub a { color:#38bdf8; }
-    .layout { display:grid; grid-template-columns:390px minmax(0,1fr); gap:22px; align-items:start; }
+    nav.tabs { display:flex; justify-content:center; gap:10px; margin-bottom:22px; }
+    .tab { background:#1e293b; border:1px solid #475569; color:#94a3b8; padding:10px 24px;
+           border-radius:999px; font-size:14px; cursor:pointer; font-family:inherit; }
+    .tab:hover { color:#e2e8f0; }
+    .tab.active { background:#38bdf8; border-color:#38bdf8; color:#0f172a; font-weight:600; }
     .panel { background:#1e293b; border-radius:14px; padding:20px; }
-    .composer { position:sticky; top:16px; }
     .panel h2 { font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:#94a3b8; margin:0 0 16px; }
+    .narrow { max-width:640px; margin:0 auto; }
     .fields { display:grid; gap:12px; }
     label { font-size:13px; color:#cbd5e1; display:grid; gap:4px; }
     input, textarea { padding:8px 10px; border-radius:8px; border:1px solid #475569;
@@ -340,30 +344,40 @@ const adminPage = (username) => page(`<!doctype html>
     textarea { min-height:150px; resize:vertical; line-height:1.5; }
     button.primary { padding:10px 14px; border-radius:8px; border:0; background:#38bdf8; color:#0f172a;
                      font-weight:600; cursor:pointer; }
+    #cancel-edit { padding:10px 12px; border-radius:8px; border:1px solid #475569;
+                   background:transparent; color:#cbd5e1; cursor:pointer; }
+    .remove-tick { display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; }
+    .remove-tick input { width:auto; }
     .hint { color:#64748b; font-size:12px; margin:4px 0 0; }
-    #status { font-size:14px; min-height:1.2em; margin:12px 0 0; color:#94a3b8; }
-    .pending { border:1px dashed #475569; border-radius:10px; padding:14px; margin-bottom:18px; }
+    #status { font-size:14px; min-height:1.2em; margin:12px 0 0; color:#94a3b8; text-align:center; }
+    .pending { border:1px dashed #475569; border-radius:12px; padding:16px; background:#1e293b; }
+    .badge { display:inline-block; font-size:11px; color:#64748b; border:1px solid #334155;
+             padding:2px 8px; border-radius:999px; margin-bottom:10px; }
     .pending-date { font-size:13px; font-weight:600; color:#cbd5e1; }
     .pending-note { white-space:pre-wrap; margin:8px 0 0; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
     .pending-frame { margin:12px 0 0; }
     .pending-frame img { display:block; max-width:100%; max-height:320px; border-radius:8px; margin:0 auto; }
-    .badge { display:inline-block; font-size:11px; color:#64748b; border:1px solid #334155; padding:2px 8px;
-             border-radius:999px; margin-bottom:10px; }
-    .entries { display:grid; gap:12px; }
-    .entry-card { background:#263449; border-radius:10px; padding:14px 16px; list-style:none; }
-    .entry-head { display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:14px;
-                  color:#cbd5e1; margin-bottom:6px; }
-    .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 6px; }
+    .notes-layout { display:grid; grid-template-columns:320px minmax(0,1fr); gap:20px; align-items:start; }
+    .note-list { display:grid; gap:8px; max-height:calc(100vh - 240px); overflow-y:auto;
+                 padding-right:4px; margin:0; padding-top:2px; }
+    .note-item { text-align:left; background:#263449; border:1px solid transparent; border-radius:10px;
+                 padding:12px 14px; cursor:pointer; display:grid; gap:4px; font-family:inherit; width:100%; }
+    .note-item:hover { border-color:#334155; }
+    .note-item.active { border-color:#38bdf8; }
+    .note-item .nd { font-size:12px; color:#94a3b8; }
+    .note-item .ns { font-size:14px; color:#e2e8f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .detail-head { display:flex; justify-content:space-between; align-items:center; gap:12px;
+                   border-bottom:1px solid #334155; padding-bottom:12px; margin-bottom:14px; }
+    .detail-date { font-size:16px; font-weight:600; color:#e2e8f0; }
+    .detail-actions { display:flex; gap:10px; }
+    .detail-date-note { }
+    .detail-note { white-space:pre-wrap; font-size:16px; line-height:1.65; margin:0 0 16px; overflow-wrap:break-word; }
+    .detail-note.muted { color:#64748b; font-size:14px; }
+    .detail-img { display:block; max-width:100%; max-height:560px; border-radius:10px; cursor:zoom-in; margin:0 auto; }
+    .zoomhint { color:#64748b; font-size:12px; margin:10px 0 0; text-align:center; }
     .entry-edit { background:none; border:0; color:#38bdf8; font-size:13px; cursor:pointer; padding:2px 6px; }
-    #cancel-edit { padding:10px 12px; border-radius:8px; border:1px solid #475569; background:transparent; color:#cbd5e1; cursor:pointer; }
-    .remove-tick { display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; }
-    .remove-tick input { width:auto; }
-    .viewer-note { white-space:pre-wrap; margin:6px 0 10px; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
-    .viewer-note.muted { color:#64748b; font-size:13px; }
-    .entry-thumb { display:block; width:100%; max-width:340px; max-height:240px; object-fit:cover;
-                   border-radius:8px; cursor:zoom-in; }
-    .zoomhint { color:#64748b; font-size:12px; margin:6px 0 0; }
-    .viewer-foot { color:#64748b; font-size:13px; margin-top:16px; }
+    .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 6px; }
+    .muted { color:#64748b; }
     #lightbox { position:fixed; inset:0; background:rgba(2,6,23,.94); z-index:50;
                 display:grid; place-items:center; cursor:zoom-out; }
     #lightbox img { max-width:94vw; max-height:86vh; width:auto; height:auto; object-fit:contain;
@@ -372,7 +386,10 @@ const adminPage = (username) => page(`<!doctype html>
                 font-size:13px; color:#cbd5e1; }
     .lightbar a { color:#38bdf8; text-decoration:none; }
     [hidden] { display:none !important; }
-    @media (max-width:880px) { .layout { grid-template-columns:1fr; } .composer { position:static; } }
+    @media (max-width:880px) {
+      .notes-layout { grid-template-columns:1fr; }
+      .note-list { max-height:44vh; }
+    }
   </style>
 </head>
 <body>
@@ -381,8 +398,14 @@ const adminPage = (username) => page(`<!doctype html>
       <h1>Private tools</h1>
       <p class="sub">Signed in as <strong>${username}</strong> 👋 · <a href="/logout">log out</a></p>
     </div>
-    <div class="layout">
-      <section class="panel composer" id="composer-panel">
+
+    <nav class="tabs" role="tablist" aria-label="Private tools sections">
+      <button type="button" class="tab active" id="tab-compose" role="tab" aria-selected="true">＋ New entry</button>
+      <button type="button" class="tab" id="tab-notes" role="tab" aria-selected="false">My notes</button>
+    </nav>
+
+    <section id="view-compose">
+      <div class="panel narrow" id="composer-panel">
         <h2>New entry</h2>
         <form id="entry-form" class="fields">
           <label>Date
@@ -404,22 +427,28 @@ const adminPage = (username) => page(`<!doctype html>
           <p class="hint">Pick a past date to backdate, or leave as today.</p>
         </form>
         <p id="status" aria-live="polite"></p>
-      </section>
-      <section class="panel" id="viewer-panel">
-        <h2>Preview &amp; saved notes</h2>
-        <div class="pending" id="pending" hidden>
-          <span class="badge">preview — not saved yet</span>
-          <div class="pending-date" id="pending-date"></div>
-          <p class="pending-note" id="pending-note"></p>
-          <div class="pending-frame" id="pending-frame" hidden>
-            <img id="pending-img" alt="preview of selected image" />
-          </div>
+      </div>
+      <div class="pending narrow" id="pending" hidden>
+        <span class="badge">preview — not saved yet</span>
+        <div class="pending-date" id="pending-date"></div>
+        <p class="pending-note" id="pending-note"></p>
+        <div class="pending-frame" id="pending-frame" hidden>
+          <img id="pending-img" alt="preview of selected image" />
         </div>
-        <ul class="entries" id="entries" style="padding:0;margin:0"></ul>
-        <p class="viewer-foot">Click any image to view it in full size.</p>
-      </section>
-    </div>
+      </div>
+    </section>
+
+    <section id="view-notes" hidden>
+      <div class="notes-layout">
+        <div class="panel">
+          <h2 id="list-title">List</h2>
+          <div class="note-list" id="note-list" role="listbox" aria-label="Saved notes"></div>
+        </div>
+        <div class="panel" id="note-detail"></div>
+      </div>
+    </section>
   </div>
+
   <div id="lightbox" hidden>
     <img id="lightbox-img" alt="full size image" />
     <div class="lightbar">
@@ -428,6 +457,7 @@ const adminPage = (username) => page(`<!doctype html>
       <span>click anywhere or press Esc to close</span>
     </div>
   </div>
+
   <script>
     (function () {
       var $ = function (id) { return document.getElementById(id); };
@@ -451,8 +481,22 @@ const adminPage = (username) => page(`<!doctype html>
       var removeRow = $("remove-image-row"), removeChk = $("remove-image");
       var editingId = null, baseImageKey = null;
       var ENTRIES = [];
+      var selectedId = null;
       dateEl.value = today;
 
+      /* ---------- tabs ---------- */
+      function setTab(name) {
+        $("view-compose").hidden = name !== "compose";
+        $("view-notes").hidden = name !== "notes";
+        $("tab-compose").classList.toggle("active", name === "compose");
+        $("tab-notes").classList.toggle("active", name === "notes");
+        $("tab-compose").setAttribute("aria-selected", name === "compose" ? "true" : "false");
+        $("tab-notes").setAttribute("aria-selected", name === "notes" ? "true" : "false");
+      }
+      $("tab-compose").addEventListener("click", function () { setTab("compose"); });
+      $("tab-notes").addEventListener("click", function () { setTab("notes"); });
+
+      /* ---------- pending preview (compose tab) ---------- */
       var objectUrl = null;
       function updatePending() {
         var d = dateEl.value, n = noteEl.value.trim();
@@ -501,7 +545,8 @@ const adminPage = (username) => page(`<!doctype html>
         cancelBtn.hidden = false;
         $("edit-hint").hidden = false;
         updatePending();
-        $("composer-panel").scrollIntoView({ behavior: "smooth", block: "start" });
+        setTab("compose");
+        window.scrollTo({ top: 0 });
         noteEl.focus();
       }
 
@@ -519,6 +564,7 @@ const adminPage = (username) => page(`<!doctype html>
         resetComposer();
       });
 
+      /* ---------- save (create or update) ---------- */
       $("entry-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var status = $("status");
@@ -529,6 +575,7 @@ const adminPage = (username) => page(`<!doctype html>
         if (fileEl.files && fileEl.files[0]) fd.append("image", fileEl.files[0]);
         fd.append("image_action", editingId && !fileEl.files[0] && removeChk.checked ? "remove" : "keep");
         var url = editingId ? "/api/entries/" + editingId : "/api/entries";
+        var savedId = editingId;
         fetch(url, { method: editingId ? "PUT" : "POST", body: fd })
           .then(function (res) {
             return res.json().then(function (d) { return { s: res.status, d: d }; });
@@ -536,25 +583,74 @@ const adminPage = (username) => page(`<!doctype html>
           .then(function (r) {
             if (r.s !== 200 || !r.d.ok) throw new Error(r.d.error || "Save failed");
             status.textContent = "Saved ✓";
+            if (!editingId && r.d.entry && r.d.entry.id) savedId = r.d.entry.id;
             exitEdit();
             resetComposer();
-            return loadEntries();
+            return loadEntries().then(function () {
+              setTab("notes");
+              selectNote(savedId);
+            });
           })
           .catch(function (err) { status.textContent = err.message || "Save failed"; });
       });
 
-      function cardHtml(e) {
-        var url = "/img/" + encodeURIComponent(e.image_key);
-        return '<li class="entry-card">' +
-          '<div class="entry-head"><span>📅 ' + esc(e.entry_date) + "</span>" +
-            '<span><button type="button" class="entry-edit" data-edit="' + esc(e.id) + '">edit</button>' +
-            '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button></span></div>' +
-          (e.note ? '<div class="viewer-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</div>"
-                  : '<div class="viewer-note muted">(no note)</div>') +
-          '<img class="entry-thumb" loading="lazy" data-key="' + esc(e.image_key) +
-            '" data-date="' + esc(e.entry_date) + '" src="' + url + '" alt="entry image">' +
-          '<p class="zoomhint">click image to view full size</p>' +
-          "</li>";
+      /* ---------- notes master-detail list ---------- */
+      function itemHtml(e) {
+        var snippet = (e.note || "(no note — image only)").replace(/\\s+/g, " ").slice(0, 80);
+        return '<button type="button" class="note-item" role="option" data-id="' + esc(e.id) + '" aria-selected="false">' +
+          '<span class="nd">📅 ' + esc(e.entry_date) + (e.image_key ? " · 📎 image" : "") + "</span>" +
+          '<span class="ns">' + esc(snippet) + "</span>" +
+          "</button>";
+      }
+
+      function renderList() {
+        var items = ENTRIES;
+        $("list-title").textContent = "List (" + items.length + ")";
+        $("tab-notes").textContent = "My notes (" + items.length + ")";
+        $("note-list").innerHTML = items.length
+          ? items.map(itemHtml).join("")
+          : '<div class="muted" style="font-size:14px">No notes yet — create one from the New entry tab.</div>';
+        highlightSelection();
+      }
+
+      function highlightSelection() {
+        var nodes = $("note-list").querySelectorAll(".note-item");
+        for (var i = 0; i < nodes.length; i++) {
+          var on = Number(nodes[i].getAttribute("data-id")) === Number(selectedId);
+          nodes[i].classList.toggle("active", on);
+          nodes[i].setAttribute("aria-selected", on ? "true" : "false");
+        }
+      }
+
+      function detailHtml(e) {
+        var h = '<div class="detail-head">' +
+          '<span class="detail-date">📅 ' + esc(e.entry_date) + "</span>" +
+          '<span class="detail-actions">' +
+            '<button type="button" class="entry-edit" data-edit="' + esc(e.id) + '">edit</button>' +
+            '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button>' +
+          "</span></div>";
+        h += e.note
+          ? '<div class="detail-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</div>"
+          : '<div class="detail-note muted">(no note — image only)</div>';
+        if (e.image_key) {
+          h += '<img class="detail-img" data-key="' + esc(e.image_key) + '" data-date="' + esc(e.entry_date) +
+            '" src="/img/' + encodeURIComponent(e.image_key) + '" alt="note image">' +
+            '<p class="zoomhint">click image to view full size</p>';
+        }
+        return h;
+      }
+
+      function selectNote(id) {
+        if (id === undefined || id === null) return renderDetailEmpty();
+        selectedId = Number(id);
+        highlightSelection();
+        var e = ENTRIES.filter(function (x) { return Number(x.id) === selectedId; })[0];
+        $("note-detail").innerHTML = e ? detailHtml(e) : '<p class="viewer-note muted">Note not found.</p>';
+        return null;
+      }
+      function renderDetailEmpty() {
+        selectedId = null;
+        $("note-detail").innerHTML = '<p class="detail-note muted">No note selected.</p>';
       }
 
       function loadEntries() {
@@ -562,18 +658,47 @@ const adminPage = (username) => page(`<!doctype html>
         return fetch("/api/entries")
           .then(function (r) { return r.ok ? r.json() : Promise.reject(new Error("load failed")); })
           .then(function (data) {
-            var items = (data && data.entries) || [];
-            ENTRIES = items;
-            $("entries").innerHTML = items.length
-              ? items.map(cardHtml).join("")
-              : '<li class="entry-card"><div class="viewer-note muted">No entries yet — write your first note on the left.</div></li>';
+            ENTRIES = (data && data.entries) || [];
+            renderList();
+            if (selectedId === null || !ENTRIES.some(function (x) { return Number(x.id) === Number(selectedId); })) {
+              selectNote(ENTRIES.length ? ENTRIES[0].id : null);
+            } else {
+              selectNote(selectedId); // refresh detail with fresh data
+            }
           })
           .catch(function () {
-            $("entries").innerHTML =
-              '<li class="entry-card"><div class="viewer-note muted">Could not load entries.</div></li>';
+            $("note-list").innerHTML = '<div class="muted" style="font-size:14px">Could not load notes.</div>';
           });
       }
 
+      /* ---------- list + detail events ---------- */
+      $("note-list").addEventListener("click", function (e) {
+        var item = e.target.closest("[data-id]");
+        if (item) selectNote(item.getAttribute("data-id"));
+      });
+
+      $("note-detail").addEventListener("click", function (e) {
+        var img = e.target.closest("[data-key]");
+        if (img) {
+          openLightbox(img.getAttribute("data-key"), img.getAttribute("data-date"));
+          return;
+        }
+        var editBtn = e.target.closest("[data-edit]");
+        if (editBtn) {
+          var target = ENTRIES.filter(function (x) {
+            return Number(x.id) === Number(editBtn.getAttribute("data-edit"));
+          })[0];
+          if (target) startEdit(target);
+          return;
+        }
+        var btn = e.target.closest("[data-del]");
+        if (!btn) return;
+        if (!confirm("Delete this note?")) return;
+        fetch("/api/entries/" + btn.getAttribute("data-del"), { method: "DELETE" })
+          .then(function (res) { return res.ok ? loadEntries() : null; });
+      });
+
+      /* ---------- lightbox ---------- */
       function openLightbox(key, date) {
         var url = "/img/" + encodeURIComponent(key);
         lightImg.src = url;
@@ -591,27 +716,6 @@ const adminPage = (username) => page(`<!doctype html>
       lightbox.addEventListener("click", closeLightbox);
       document.addEventListener("keydown", function (e) {
         if (e.key === "Escape" && !lightbox.hidden) closeLightbox();
-      });
-
-      $("entries").addEventListener("click", function (e) {
-        var img = e.target.closest("[data-key]");
-        if (img) {
-          openLightbox(img.getAttribute("data-key"), img.getAttribute("data-date"));
-          return;
-        }
-        var editBtn = e.target.closest("[data-edit]");
-        if (editBtn) {
-          var target = ENTRIES.filter(function (x) {
-            return Number(x.id) === Number(editBtn.getAttribute("data-edit"));
-          })[0];
-          if (target) startEdit(target);
-          return;
-        }
-        var btn = e.target.closest("[data-del]");
-        if (!btn) return;
-        if (!confirm("Delete this entry?")) return;
-        fetch("/api/entries/" + btn.getAttribute("data-del"), { method: "DELETE" })
-          .then(function (res) { return res.ok ? loadEntries() : null; });
       });
 
       loadEntries();
