@@ -13,8 +13,12 @@
  *
  *     any other path -> GitHub Pages origin (zone routes own only the above)
  *
+ *   GET/POST /login blocked after LOCK_MAX bad attempts from one IP -> page
+ *   closed for LOCK_MS (auto-opens again, no config change needed)
+ *
  * Storage:
  *   D1 (env.DB): users (PBKDF2 hashes) + entries (note/date/image_key)
+ *                + login_failures (per-IP brute-force lockout)
  *   KV (env.MEDIA): uploaded image bytes, metadata.contentType
  *
  * Sessions are HMAC-signed cookies "username.expiryMs.signature".
@@ -29,6 +33,11 @@ const USERNAME_RE = /^[A-Za-z0-9._-]{1,32}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_MAX = 5000;
 const MAX_IMG_BYTES = 15 * 1024 * 1024;
+// brute-force guard: LOCK_MAX bad logins from one IP inside ATTEMPT_WINDOW_MS
+// close /login for LOCK_MS
+const LOCK_MAX = 3;
+const LOCK_MS = 15 * 60 * 1000;
+const ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
 
 const encoder = new TextEncoder();
 
@@ -88,17 +97,72 @@ async function readSession(request, env) {
 
 /* ---------------- auth ---------------- */
 
+const clientIp = (request) => request.headers.get("CF-Connecting-IP") || "unknown";
+
+// brute-force guard row for one IP. null when the table is missing or D1
+// hiccups -> we fail open, so storage trouble can never brick the login page
+async function loadGuardRow(env, ip) {
+  try {
+    return await env.DB
+      .prepare("SELECT fails, locked_until, updated_at FROM login_failures WHERE ip = ?")
+      .bind(ip)
+      .first();
+  } catch {
+    return null;
+  }
+}
+
+const lockRemaining = (row, now) =>
+  row && Number(row.locked_until || 0) > now ? Number(row.locked_until) - now : 0;
+
+// failed attempts that still count; older than ATTEMPT_WINDOW_MS start fresh
+function freshFails(row, now) {
+  if (!row || Number(row.updated_at || 0) < now - ATTEMPT_WINDOW_MS) return 0;
+  return Math.max(0, Number(row.fails || 0));
+}
+
+// count one bad login from ip and engage the lock when the limit is hit
+async function recordFailure(env, ip, row, now) {
+  const fails = freshFails(row, now) + 1;
+  if (fails >= LOCK_MAX) {
+    // engage lock; also reset fails so the window restarts cleanly after it lifts
+    await env.DB
+      .prepare("UPDATE login_failures SET fails = 0, locked_until = ?, updated_at = ? WHERE ip = ?")
+      .bind(now + LOCK_MS, now, ip)
+      .run();
+    return;
+  }
+  if (row) {
+    await env.DB
+      .prepare("UPDATE login_failures SET fails = ?, locked_until = 0, updated_at = ? WHERE ip = ?")
+      .bind(fails, now, ip)
+      .run();
+  } else {
+    await env.DB
+      .prepare("INSERT INTO login_failures (ip, fails, locked_until, updated_at) VALUES (?, ?, 0, ?)")
+      .bind(ip, fails, now)
+      .run();
+  }
+}
+
 async function handleLogin(request, env) {
   const form = await request.formData();
   const username = String(form.get("username") || "").trim();
   const password = String(form.get("password") || "");
   const { origin } = new URL(request.url);
 
-  if (username && USERNAME_RE.test(username) && password) {
+  const ip = clientIp(request);
+  const now = Date.now();
+  const row = await loadGuardRow(env, ip);
+  const lockedFor = lockRemaining(row, now);
+  if (lockedFor > 0) return lockedPage(lockedFor);
+
+  const validName = username && USERNAME_RE.test(username) ? username : null;
+  if (validName && password) {
     try {
       const user = await env.DB
         .prepare("SELECT username, salt, password_hash FROM users WHERE username = ?")
-        .bind(username)
+        .bind(validName)
         .first();
       if (user) {
         const ok = bytesEqual(
@@ -106,13 +170,19 @@ async function handleLogin(request, env) {
           encoder.encode(user.password_hash),
         );
         if (ok) {
+          // success wipes this IP's failed-attempt counter
+          try {
+            await env.DB.prepare("DELETE FROM login_failures WHERE ip = ?").bind(ip).run();
+          } catch {
+            // counter cleanup failing must not cost the user their session
+          }
           const exp = Date.now() + TTL_MS;
-          const sig = await hmacHex(`${username}|${exp}`, env.SESSION_SECRET ?? FALLBACK_SECRET);
+          const sig = await hmacHex(`${validName}|${exp}`, env.SESSION_SECRET ?? FALLBACK_SECRET);
           return new Response(null, {
             status: 302,
             headers: {
               Location: `${origin}/hello`,
-              "Set-Cookie": `${COOKIE}=${encodeURIComponent(username)}.${exp}.${sig}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${TTL_MS / 1000}`,
+              "Set-Cookie": `${COOKIE}=${encodeURIComponent(validName)}.${exp}.${sig}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${TTL_MS / 1000}`,
             },
           });
         }
@@ -120,6 +190,13 @@ async function handleLogin(request, env) {
     } catch {
       // D1 error or hashing failure -> treat as a failed login, never as success
     }
+  }
+
+  // wrong username, wrong password, or a malformed form: count the attempt
+  try {
+    await recordFailure(env, ip, row, now);
+  } catch {
+    // guard bookkeeping failing must not stop the login flow
   }
   return Response.redirect(`${origin}/login?error=1`, 303);
 }
@@ -295,7 +372,7 @@ const page = (body) =>
     headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
   });
 
-const loginPage = (error) => page(`<!doctype html>
+const loginPage = (error, attemptsLeft) => page(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -305,7 +382,7 @@ const loginPage = (error) => page(`<!doctype html>
 <body style="margin:0;font-family:system-ui,sans-serif;background:#0f172a;display:grid;place-items:center;min-height:100vh">
   <form method="post" action="/login" style="background:#1e293b;color:#e2e8f0;padding:32px;border-radius:12px;display:grid;gap:12px;min-width:280px">
     <h2 style="margin:0;font-weight:600">Private area</h2>
-    ${error ? '<p style="margin:0;color:#f87171;font-size:14px">Invalid credentials — try again.</p>' : ""}
+    ${error ? `<p style="margin:0;color:#f87171;font-size:14px">Invalid credentials.${Number.isFinite(attemptsLeft) && attemptsLeft > 0 ? " " + attemptsLeft + " attempt" + (attemptsLeft === 1 ? "" : "s") + " left before a 15-minute lock." : ""}</p>` : ""}
     <input name="username" placeholder="Username" required autofocus
       style="padding:8px 10px;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#e2e8f0" />
     <input name="password" type="password" placeholder="Password" required
@@ -314,6 +391,26 @@ const loginPage = (error) => page(`<!doctype html>
   </form>
 </body>
 </html>`);
+
+const lockedPage = (remainMs) => {
+  const mins = Math.max(1, Math.ceil(remainMs / 60000));
+  return page(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta http-equiv="refresh" content="45" />
+  <title>Temporarily locked · onlinelkb.in</title>
+</head>
+<body style="margin:0;font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:grid;place-items:center;min-height:100vh">
+  <div style="background:#1e293b;padding:32px;border-radius:12px;max-width:360px">
+    <h2 style="margin:0 0 10px;font-weight:600">🔒 Too many failed attempts</h2>
+    <p style="margin:0;color:#cbd5e1;font-size:14px;line-height:1.6">Sign-in is closed for about <strong style="color:#f87171">${mins} minute${mins === 1 ? "" : "s"}</strong> after repeated failed logins from your network.</p>
+    <p style="margin:12px 0 0;color:#94a3b8;font-size:12px">This page refreshes itself every 45 seconds — no need to reopen anything.</p>
+  </div>
+</body>
+</html>`);
+};
 
 const adminPage = (username) => page(`<!doctype html>
 <html lang="en">
@@ -731,9 +828,11 @@ export default {
     const { pathname, origin, searchParams } = new URL(request.url);
 
     if (pathname === "/login") {
-      return request.method === "POST"
-        ? handleLogin(request, env)
-        : loginPage(searchParams.get("error") === "1");
+      if (request.method === "POST") return handleLogin(request, env);
+      const row = await loadGuardRow(env, clientIp(request));
+      const now = Date.now();
+      if (lockRemaining(row, now) > 0) return lockedPage(lockRemaining(row, now));
+      return loginPage(searchParams.get("error") === "1", LOCK_MAX - freshFails(row, now));
     }
 
     if (pathname === "/logout") {
