@@ -32,8 +32,6 @@
                      font-weight:600; cursor:pointer; }
     #cancel-edit { padding:10px 12px; border-radius:8px; border:1px solid #475569;
                    background:transparent; color:#cbd5e1; cursor:pointer; }
-    .remove-tick { display:flex; align-items:center; gap:8px; font-size:13px; color:#cbd5e1; }
-    .remove-tick input { width:auto; }
     .hint { color:#64748b; font-size:12px; margin:4px 0 0; }
     #status { font-size:14px; min-height:1.2em; margin:12px 0 0; color:#94a3b8; text-align:center; }
     .pending { border:1px dashed #475569; border-radius:12px; padding:16px; background:#1e293b; }
@@ -42,7 +40,18 @@
     .pending-date { font-size:13px; font-weight:600; color:#cbd5e1; }
     .pending-note { white-space:pre-wrap; margin:8px 0 0; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
     .pending-frame { margin:12px 0 0; }
-    .pending-frame img { display:block; max-width:100%; max-height:320px; border-radius:8px; margin:0 auto; }
+    .thumb-grid { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+    .thumb-grid img { display:block; width:auto; max-width:100%; max-height:150px; border-radius:8px;
+                      object-fit:contain; background:#0f172a; border:1px solid #334155; }
+    .existing-images { display:flex; flex-wrap:wrap; gap:8px; }
+    .existing-thumb { position:relative; display:inline-block; }
+    .existing-thumb img { display:block; width:auto; max-width:100%; max-height:110px; border-radius:8px;
+                          object-fit:contain; background:#0f172a; border:1px solid #334155; }
+    .existing-thumb.removed img { opacity:.35; filter:grayscale(1); }
+    .existing-thumb button { position:absolute; top:4px; right:4px; width:26px; height:26px; padding:0;
+                             border-radius:999px; border:1px solid #475569; background:rgba(15,23,42,.9);
+                             color:#e2e8f0; font-size:13px; line-height:1; cursor:pointer; font-family:inherit; }
+    .existing-thumb button:hover { border-color:#38bdf8; }
     .notes-layout { display:grid; grid-template-columns:320px minmax(0,1fr); gap:20px; align-items:start; }
     .note-list { display:grid; gap:8px; max-height:calc(100vh - 240px); overflow-y:auto;
                  padding-right:4px; margin:0; padding-top:2px;
@@ -68,7 +77,16 @@
     .detail-date-note { }
     .detail-note { white-space:pre-wrap; font-size:16px; line-height:1.65; margin:0 0 16px; overflow-wrap:break-word; }
     .detail-note.muted { color:#64748b; font-size:14px; }
-    .detail-img { display:block; max-width:100%; max-height:560px; border-radius:10px; cursor:zoom-in; margin:0 auto; }
+    .detail-images { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
+    .detail-thumb { position:relative; display:inline-block; line-height:0; }
+    .detail-images .thumb { padding:0; border:0; background:none; border-radius:10px; cursor:zoom-in; line-height:0; }
+    .detail-images .thumb:focus-visible { outline:2px solid #38bdf8; outline-offset:2px; }
+    .detail-img { display:block; width:auto; max-width:100%; max-height:220px; border-radius:10px;
+                  object-fit:contain; background:#0f172a; }
+    .img-del { position:absolute; top:5px; right:5px; width:26px; height:26px; padding:0; border-radius:999px;
+               border:1px solid #475569; background:rgba(15,23,42,.9); color:#f87171; font-size:13px;
+               line-height:1; cursor:pointer; font-family:inherit; }
+    .img-del:hover { border-color:#f87171; background:rgba(127,29,29,.9); }
     .zoomhint { color:#64748b; font-size:12px; margin:10px 0 0; text-align:center; }
     .entry-edit { background:none; border:0; color:#38bdf8; font-size:13px; cursor:pointer; padding:2px 6px; }
     .entry-del { background:none; border:0; color:#f87171; font-size:13px; cursor:pointer; padding:2px 6px; }
@@ -77,6 +95,12 @@
                 display:grid; place-items:center; cursor:zoom-out; }
     #lightbox img { max-width:94vw; max-height:86vh; width:auto; height:auto; object-fit:contain;
                     border-radius:6px; box-shadow:0 12px 48px rgba(0,0,0,.65); }
+    .lightnav { position:fixed; top:50%; transform:translateY(-50%); z-index:51; width:44px; height:44px;
+                border-radius:999px; border:1px solid #475569; background:rgba(15,23,42,.75); color:#e2e8f0;
+                font-size:24px; line-height:1; cursor:pointer; font-family:inherit; }
+    .lightnav:hover { border-color:#38bdf8; color:#fff; }
+    .lightnav.prev { left:16px; }
+    .lightnav.next { right:16px; }
     .lightbar { position:fixed; bottom:18px; left:0; right:0; display:flex; gap:16px; justify-content:center;
                 font-size:13px; color:#cbd5e1; }
     .lightbar a { color:#38bdf8; text-decoration:none; }
@@ -110,16 +134,13 @@
           <label>Note
             <textarea id="note" name="note" maxlength="5000" placeholder="Write something…"></textarea>
           </label>
-          <label>Image (optional, max 15MB)
-            <input id="image" name="image" type="file" accept="image/*" />
+          <label>Images (optional, up to 10, max 15MB each)
+            <input id="image" name="image" type="file" accept="image/*" multiple />
           </label>
-          <label class="remove-tick" id="remove-image-row" hidden>
-            <input id="remove-image" type="checkbox" />
-            remove the existing image
-          </label>
+          <div class="existing-images" id="existing-images" hidden></div>
           <button class="primary" id="submit-btn" type="submit">Save entry</button>
           <button type="button" id="cancel-edit" hidden>Cancel</button>
-          <p class="hint" id="edit-hint" hidden>You are editing a saved note — saving replaces it.</p>
+          <p class="hint" id="edit-hint" hidden>You are editing a saved note — saving replaces it. Use ✕ on an image to remove it.</p>
           <p class="hint">Pick a past date to backdate, or leave as today.</p>
         </form>
         <p id="status" aria-live="polite"></p>
@@ -129,7 +150,7 @@
         <div class="pending-date" id="pending-date"></div>
         <p class="pending-note" id="pending-note"></p>
         <div class="pending-frame" id="pending-frame" hidden>
-          <img id="pending-img" alt="preview of selected image" />
+          <div class="thumb-grid" id="pending-images"></div>
         </div>
       </div>
     </section>
@@ -148,8 +169,11 @@
 
   <div id="lightbox" hidden>
     <img id="lightbox-img" alt="full size image" />
+    <button type="button" class="lightnav prev" id="lightbox-prev" aria-label="previous image">‹</button>
+    <button type="button" class="lightnav next" id="lightbox-next" aria-label="next image">›</button>
     <div class="lightbar">
       <span id="lightbox-date"></span>
+      <span id="lightbox-count"></span>
       <a id="lightbox-original" href="#" target="_blank" rel="noopener noreferrer">open original ↗</a>
       <span>click anywhere or press Esc to close</span>
     </div>
@@ -168,19 +192,37 @@
         String(now.getMonth() + 1).padStart(2, "0") + "-" +
         String(now.getDate()).padStart(2, "0");
 
+      var MAX_IMAGES = 10;
+      var MAX_IMG_BYTES = 15 * 1024 * 1024;
       var dateEl = $("entry_date"), noteEl = $("note"), fileEl = $("image");
       var pend = $("pending"), pendDate = $("pending-date"), pendNote = $("pending-note");
-      var pendFrame = $("pending-frame"), pendImg = $("pending-img");
+      var pendFrame = $("pending-frame"), pendImages = $("pending-images");
+      var existingWrap = $("existing-images");
       var lightbox = $("lightbox"), lightImg = $("lightbox-img"), lightDate = $("lightbox-date");
-      var lightOriginal = $("lightbox-original");
+      var lightOriginal = $("lightbox-original"), lightCount = $("lightbox-count");
+      var lightPrev = $("lightbox-prev"), lightNext = $("lightbox-next");
       var pendBadge = pend.querySelector(".badge");
       var submitBtn = $("submit-btn"), cancelBtn = $("cancel-edit");
-      var removeRow = $("remove-image-row"), removeChk = $("remove-image");
-      var editingId = null, baseImageKey = null;
+      var editingId = null, baseImages = [], removedImages = {};
+      var previewUrls = [];
       var ENTRIES = [];
       var selectedId = null;
       var PAGE_SIZE = 8, currentPage = 1;
       dateEl.value = today;
+
+      // images stored on an entry; tolerates the legacy single image_key shape
+      function imagesOf(entry) {
+        if (entry && entry.images && entry.images.length) return entry.images;
+        return entry && entry.image_key ? [entry.image_key] : [];
+      }
+
+      function selectedFiles() {
+        return fileEl.files ? Array.prototype.slice.call(fileEl.files) : [];
+      }
+
+      function keptImages() {
+        return baseImages.filter(function (key) { return !removedImages[key]; });
+      }
 
       /* ---------- tabs ---------- */
       function setTab(name) {
@@ -195,53 +237,102 @@
       $("tab-notes").addEventListener("click", function () { setTab("notes"); });
 
       /* ---------- pending preview (compose tab) ---------- */
-      var objectUrl = null;
+      function clearPreviewUrls() {
+        previewUrls.forEach(function (url) { URL.revokeObjectURL(url); });
+        previewUrls = [];
+      }
+
+      // saved images still on the entry + newly selected files, all small thumbs
+      function renderPendingImages() {
+        var html = keptImages().map(function (key) {
+          return '<img src="/img/' + encodeURIComponent(key) + '" alt="saved image preview" loading="lazy">';
+        });
+        var files = selectedFiles();
+        clearPreviewUrls();
+        files.forEach(function (f) {
+          var url = URL.createObjectURL(f);
+          previewUrls.push(url);
+          html.push('<img src="' + url + '" alt="preview of selected image">');
+        });
+        pendImages.innerHTML = html.join("");
+        pendFrame.hidden = html.length === 0;
+      }
+
+      // existing images being edited, each with a remove/restore toggle
+      function renderExistingImages() {
+        if (!editingId || !baseImages.length) {
+          existingWrap.hidden = true;
+          existingWrap.innerHTML = "";
+          return;
+        }
+        existingWrap.hidden = false;
+        existingWrap.innerHTML = baseImages.map(function (key) {
+          var removed = !!removedImages[key];
+          return '<span class="existing-thumb' + (removed ? " removed" : "") + '">' +
+            '<img src="/img/' + encodeURIComponent(key) + '" alt="saved image" loading="lazy">' +
+            '<button type="button" data-toggle="' + esc(key) + '" aria-label="' +
+              (removed ? "keep this image" : "remove this image") + '">' + (removed ? "↺" : "✕") + "</button>" +
+            "</span>";
+        }).join("");
+      }
+
       function updatePending() {
         var d = dateEl.value, n = noteEl.value.trim();
-        var f = fileEl.files && fileEl.files[0];
-        if (f && removeChk.checked) removeChk.checked = false; // picking a file means replace, not remove
-        removeRow.hidden = !(editingId && baseImageKey && !f);
+        var files = selectedFiles();
+        var removedCount = baseImages.filter(function (key) { return removedImages[key]; }).length;
         pendBadge.textContent = "preview — " + (editingId ? "editing saved note" : "not saved yet");
-        var show = (!!n) || (!!f) || d !== today;
+        var show = !!n || files.length > 0 || keptImages().length > 0 || removedCount > 0 || d !== today;
         pend.hidden = !show;
         if (!show) return;
         pendDate.textContent = "📅 " + d;
-        var removing = !!(editingId && removeChk.checked && baseImageKey && !f);
-        pendNote.textContent = n || (removing ? "(note empty — image will be removed)" : "(no note — image only)");
-        if (f) {
-          if (objectUrl) URL.revokeObjectURL(objectUrl);
-          objectUrl = URL.createObjectURL(f);
-          pendImg.src = objectUrl;
-          pendFrame.hidden = false;
-        } else {
-          pendImg.removeAttribute("src");
-          pendFrame.hidden = true;
-        }
+        var imageOnly = keptImages().length + files.length;
+        pendNote.textContent = n || (imageOnly ? "(no note — images only)" : "(note empty — images will be removed)");
       }
+
       noteEl.addEventListener("input", updatePending);
       dateEl.addEventListener("input", updatePending);
-      fileEl.addEventListener("change", updatePending);
+      fileEl.addEventListener("change", function () {
+        var files = selectedFiles();
+        var status = $("status");
+        if (files.length > MAX_IMAGES) status.textContent = "Too many images — max " + MAX_IMAGES;
+        else if (files.some(function (f) { return f.size > MAX_IMG_BYTES; })) status.textContent = "Each image must be 15MB or smaller";
+        else status.textContent = "";
+        renderPendingImages();
+        updatePending();
+      });
+
+      existingWrap.addEventListener("click", function (e) {
+        var btn = e.target.closest("[data-toggle]");
+        if (!btn) return;
+        var key = btn.getAttribute("data-toggle");
+        removedImages[key] = !removedImages[key];
+        renderExistingImages();
+        renderPendingImages();
+        updatePending();
+      });
 
       function exitEdit() {
         editingId = null;
-        baseImageKey = null;
+        baseImages = [];
+        removedImages = {};
         submitBtn.textContent = "Save entry";
         cancelBtn.hidden = true;
-        removeRow.hidden = true;
-        removeChk.checked = false;
         $("edit-hint").hidden = true;
+        renderExistingImages();
       }
 
       function startEdit(entry) {
         editingId = Number(entry.id);
-        baseImageKey = entry.image_key || null;
+        baseImages = imagesOf(entry).slice();
+        removedImages = {};
         fileEl.value = "";
-        removeChk.checked = false;
         dateEl.value = entry.entry_date;
         noteEl.value = entry.note || "";
         submitBtn.textContent = "Update entry";
         cancelBtn.hidden = false;
         $("edit-hint").hidden = false;
+        renderExistingImages();
+        renderPendingImages();
         updatePending();
         setTab("compose");
         window.scrollTo({ top: 0 });
@@ -252,8 +343,10 @@
         noteEl.value = "";
         fileEl.value = "";
         dateEl.value = today;
-        if (objectUrl) URL.revokeObjectURL(objectUrl);
-        objectUrl = null;
+        baseImages = [];
+        removedImages = {};
+        renderExistingImages();
+        renderPendingImages();
         updatePending();
       }
 
@@ -266,12 +359,26 @@
       $("entry-form").addEventListener("submit", function (e) {
         e.preventDefault();
         var status = $("status");
+        var files = selectedFiles();
+        var removed = Object.keys(removedImages).filter(function (key) { return removedImages[key]; });
+        var kept = keptImages();
+        if (files.length > MAX_IMAGES || kept.length + files.length > MAX_IMAGES) {
+          status.textContent = "Too many images (max " + MAX_IMAGES + ")";
+          return;
+        }
+        if (files.some(function (f) { return f.size > MAX_IMG_BYTES; })) {
+          status.textContent = "Each image must be 15MB or smaller";
+          return;
+        }
         status.textContent = "Saving…";
         var fd = new FormData();
         fd.append("entry_date", dateEl.value);
         fd.append("note", noteEl.value);
-        if (fileEl.files && fileEl.files[0]) fd.append("image", fileEl.files[0]);
-        fd.append("image_action", editingId && !fileEl.files[0] && removeChk.checked ? "remove" : "keep");
+        files.forEach(function (f) { fd.append("image", f); });
+        if (editingId) {
+          fd.append("remove_images", JSON.stringify(removed));
+          if (!files.length && baseImages.length && kept.length === 0) fd.append("image_action", "remove");
+        }
         var url = editingId ? "/api/entries/" + editingId : "/api/entries";
         var savedId = editingId;
         fetch(url, { method: editingId ? "PUT" : "POST", body: fd })
@@ -294,9 +401,11 @@
 
       /* ---------- notes master-detail list ---------- */
       function itemHtml(e) {
-        var snippet = (e.note || "(no note — image only)").replace(/\\s+/g, " ").slice(0, 80);
+        var count = imagesOf(e).length;
+        var snippet = (e.note || "(no note — image only)").replace(/\s+/g, " ").slice(0, 80);
         return '<button type="button" class="note-item" role="option" data-id="' + esc(e.id) + '" aria-selected="false">' +
-          '<span class="nd">📅 ' + esc(e.entry_date) + (e.image_key ? " · 📎 image" : "") + "</span>" +
+          '<span class="nd">📅 ' + esc(e.entry_date) +
+            (count ? " · 📎 " + count + (count === 1 ? " image" : " images") : "") + "</span>" +
           '<span class="ns">' + esc(snippet) + "</span>" +
           "</button>";
       }
@@ -367,6 +476,7 @@
       }
 
       function detailHtml(e) {
+        var imgs = imagesOf(e);
         var h = '<div class="detail-head">' +
           '<span class="detail-date">📅 ' + esc(e.entry_date) + "</span>" +
           '<span class="detail-actions">' +
@@ -374,12 +484,23 @@
             '<button type="button" class="entry-del" data-del="' + esc(e.id) + '">delete</button>' +
           "</span></div>";
         h += e.note
-          ? '<div class="detail-note">' + esc(e.note).replace(/\\n/g, "<br>") + "</div>"
+          ? '<div class="detail-note">' + esc(e.note).replace(/\n/g, "<br>") + "</div>"
           : '<div class="detail-note muted">(no note — image only)</div>';
-        if (e.image_key) {
-          h += '<img class="detail-img" data-key="' + esc(e.image_key) + '" data-date="' + esc(e.entry_date) +
-            '" src="/img/' + encodeURIComponent(e.image_key) + '" alt="note image">' +
-            '<p class="zoomhint">click image to view full size</p>';
+        if (imgs.length) {
+          h += '<div class="detail-images">' + imgs.map(function (key, i) {
+            return '<span class="detail-thumb">' +
+              '<button type="button" class="thumb" data-key="' + esc(key) + '" data-entry="' + esc(e.id) +
+                '" data-index="' + i + '" aria-label="open image ' + (i + 1) + '">' +
+                '<img class="detail-img" src="/img/' + encodeURIComponent(key) +
+                  '" alt="note image ' + (i + 1) + '" loading="lazy">' +
+              "</button>" +
+              '<button type="button" class="img-del" data-del-image="' + esc(key) + '" data-entry="' + esc(e.id) +
+                '" aria-label="delete image ' + (i + 1) + '">✕</button>' +
+            "</span>";
+          }).join("") + "</div>" +
+          '<p class="zoomhint">' +
+            (imgs.length > 1 ? imgs.length + " images · click one to view full size" : "click image to view full size") +
+          "</p>";
         }
         return h;
       }
@@ -423,6 +544,27 @@
           });
       }
 
+      // remove one saved image without entering the edit form
+      function deleteImage(entryId, key) {
+        var entry = ENTRIES.filter(function (x) { return Number(x.id) === Number(entryId); })[0];
+        if (!entry) return;
+        if (!confirm("Delete this image?")) return;
+        var fd = new FormData();
+        fd.append("entry_date", entry.entry_date);
+        fd.append("note", entry.note || "");
+        fd.append("remove_images", JSON.stringify([key]));
+        fetch("/api/entries/" + entryId, { method: "PUT", body: fd })
+          .then(function (res) {
+            return res.json().then(function (d) { return { s: res.status, d: d }; });
+          })
+          .then(function (r) {
+            if (r.s !== 200 || !r.d.ok) throw new Error(r.d.error || "Delete failed");
+            closeLightbox();
+            return loadEntries();
+          })
+          .catch(function (err) { alert(err.message || "Could not delete image"); });
+      }
+
       /* ---------- list + detail events ---------- */
       $("note-list").addEventListener("click", function (e) {
         var item = e.target.closest("[data-id]");
@@ -438,9 +580,18 @@
       });
 
       $("note-detail").addEventListener("click", function (e) {
+        var delImg = e.target.closest("[data-del-image]");
+        if (delImg) {
+          deleteImage(delImg.getAttribute("data-entry"), delImg.getAttribute("data-del-image"));
+          return;
+        }
         var img = e.target.closest("[data-key]");
         if (img) {
-          openLightbox(img.getAttribute("data-key"), img.getAttribute("data-date"));
+          var entryId = img.getAttribute("data-entry");
+          var entry = ENTRIES.filter(function (x) { return Number(x.id) === Number(entryId); })[0];
+          var keys = entry ? imagesOf(entry) : [img.getAttribute("data-key")];
+          var index = Number(img.getAttribute("data-index"));
+          openLightbox(keys, isNaN(index) ? 0 : index, entry ? entry.entry_date : "");
           return;
         }
         var editBtn = e.target.closest("[data-edit]");
@@ -458,24 +609,53 @@
           .then(function (res) { return res.ok ? loadEntries() : null; });
       });
 
-      /* ---------- lightbox ---------- */
-      function openLightbox(key, date) {
+      /* ---------- lightbox (arrows step through an entry's images) ---------- */
+      var lightKeys = [], lightIndex = 0, lightEntryDate = "";
+
+      function renderLightbox() {
+        var key = lightKeys[lightIndex];
+        if (!key) return closeLightbox();
         var url = "/img/" + encodeURIComponent(key);
         lightImg.src = url;
-        lightDate.textContent = "📅 " + date;
         lightOriginal.href = url;
+        lightDate.textContent = "📅 " + lightEntryDate;
+        lightCount.textContent = lightKeys.length > 1 ? (lightIndex + 1) + " / " + lightKeys.length : "";
+        lightPrev.hidden = lightKeys.length < 2;
+        lightNext.hidden = lightKeys.length < 2;
+      }
+
+      function openLightbox(keys, index, date) {
+        lightKeys = (keys || []).slice();
+        lightIndex = Math.max(0, Math.min(index || 0, lightKeys.length - 1));
+        lightEntryDate = date || "";
+        renderLightbox();
         lightbox.hidden = false;
         document.body.style.overflow = "hidden";
       }
+
+      function stepLightbox(delta) {
+        if (lightKeys.length < 2) return;
+        lightIndex = (lightIndex + delta + lightKeys.length) % lightKeys.length;
+        renderLightbox();
+      }
+
       function closeLightbox() {
         lightbox.hidden = true;
         lightImg.removeAttribute("src");
         lightOriginal.removeAttribute("href");
+        lightCount.textContent = "";
+        lightKeys = [];
         document.body.style.overflow = "";
       }
+
+      lightPrev.addEventListener("click", function (e) { e.stopPropagation(); stepLightbox(-1); });
+      lightNext.addEventListener("click", function (e) { e.stopPropagation(); stepLightbox(1); });
       lightbox.addEventListener("click", closeLightbox);
       document.addEventListener("keydown", function (e) {
-        if (e.key === "Escape" && !lightbox.hidden) closeLightbox();
+        if (lightbox.hidden) return;
+        if (e.key === "Escape") closeLightbox();
+        else if (e.key === "ArrowLeft") stepLightbox(-1);
+        else if (e.key === "ArrowRight") stepLightbox(1);
       });
 
       loadEntries();

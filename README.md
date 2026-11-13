@@ -191,6 +191,39 @@ Run `npm test` before pushing; the flags-wasm suite will fail if you edited `was
 
 ---
 
+## Private notes worker (`worker/`)
+
+The GitHub Pages build is static; a small Cloudflare Worker serves the private
+admin tool at `onlinelkb.in/login` → `/hello`. Staging (`worker-staging/`) just
+re-exports the same worker code.
+
+| Path | Purpose |
+|---|---|
+| `worker/src/index.js` | auth/session, notes API, gated image serving |
+| `worker/src/pages/*.html` | login, lockout and admin page templates |
+| `worker/schema.sql` | D1 tables for a fresh install |
+| `worker/migrations/` | incremental D1 changes (apply before deploying) |
+
+Each entry holds a note plus up to **10 images** (15 MB each). Image bytes live
+in the `MEDIA` KV namespace; D1 stores the ordered key list in
+`entries.images` (JSON) and mirrors the first key in the legacy `image_key`
+column. The admin view previews images as small thumbnails, supports selecting
+several files at once, and lets you delete individual images from a note (✕ on
+the thumbnail, or in the edit form).
+
+```bash
+# one-time / after new migration files: add entries.images and backfill it
+npx wrangler d1 migrations apply lkb-auth --remote --config worker/wrangler.toml
+
+# deploy the worker (run the migration first so writes never hit a missing column)
+npx wrangler deploy --config worker/wrangler.toml
+```
+
+Local development uses `--local` instead of `--remote` and stores state under
+`worker/.wrangler/`.
+
+---
+
 ## Deployment
 
 1. Push to `main`

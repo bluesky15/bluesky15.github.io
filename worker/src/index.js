@@ -6,7 +6,7 @@
  *   onlinelkb.in/hello          -> gated admin app
  *                                 nav: [New entry] [My notes]
  *                                 My notes = master-detail: list left, selected
- *                                 note's text + image on the right
+ *                                 note's text + images on the right
  *   onlinelkb.in/logout         -> clears session
  *   onlinelkb.in/api/entries*   -> JSON API (list/create/update/delete, gated)
  *   onlinelkb.in/img/*          -> gated image serving from Workers KV
@@ -17,9 +17,14 @@
  *   closed for LOCK_MS (auto-opens again, no config change needed)
  *
  * Storage:
- *   D1 (env.DB): users (PBKDF2 hashes) + entries (note/date/image_key)
+ *   D1 (env.DB): users (PBKDF2 hashes)
+ *                + entries (note/date/image_key + images JSON key list)
  *                + login_failures (per-IP brute-force lockout)
  *   KV (env.MEDIA): uploaded image bytes, metadata.contentType
+ *
+ *   Each entry holds up to MAX_IMAGES images. entries.images stores the ordered
+ *   KV keys as a JSON array; entries.image_key mirrors the first key so older
+ *   clients (and pre-migration rows) keep working.
  *
  * Sessions are HMAC-signed cookies "username.expiryMs.signature".
  * Credentials/kv ids never live in this repo; see worker/schema.sql and
@@ -40,6 +45,7 @@ const USERNAME_RE = /^[A-Za-z0-9._-]{1,32}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const NOTE_MAX = 5000;
 const MAX_IMG_BYTES = 15 * 1024 * 1024;
+const MAX_IMAGES = 10;
 // brute-force guard: LOCK_MAX bad logins from one IP inside ATTEMPT_WINDOW_MS
 // close /login for LOCK_MS
 const LOCK_MAX = 3;
@@ -224,43 +230,106 @@ function imageExt(name, type) {
   return byType[type] || "bin";
 }
 
+// every non-empty file under the repeated `image` form field (supports both
+// one file from older clients and many files from the multi-image composer)
+const imageFiles = (form) =>
+  form.getAll("image").filter((f) => f && typeof f === "object" && f.size > 0);
+
+// `remove_images` is a JSON array of KV keys the client wants dropped
+function removeImageKeys(form) {
+  const raw = String(form.get("remove_images") || "");
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((k) => typeof k === "string" && k) : [];
+  } catch {
+    return [];
+  }
+}
+
+// ordered image keys for a row, falling back to the legacy single-image column
+function parseImageKeys(row) {
+  let keys = [];
+  if (row && row.images) {
+    try {
+      const parsed = JSON.parse(row.images);
+      if (Array.isArray(parsed)) keys = parsed.filter((k) => typeof k === "string" && k);
+    } catch {
+      // corrupt/legacy JSON -> fall back to image_key below
+    }
+  }
+  if (!keys.length && row && row.image_key) keys = [row.image_key];
+  return [...new Set(keys)];
+}
+
+async function deleteImages(env, keys) {
+  await Promise.all(keys.map((key) => env.MEDIA.delete(key).catch(() => {})));
+}
+
+// upload the files, rolling back already-written KV objects if one fails
+async function storeImages(env, entryDate, files) {
+  const keys = [];
+  try {
+    for (const file of files) {
+      const key = `img-${entryDate}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${imageExt(file.name, file.type)}`;
+      await env.MEDIA.put(key, new Uint8Array(await file.arrayBuffer()), {
+        metadata: { contentType: file.type || "application/octet-stream" },
+      });
+      keys.push(key);
+    }
+    return keys;
+  } catch (err) {
+    await deleteImages(env, keys);
+    throw err;
+  }
+}
+
+const tooManyImages = () => json({ ok: false, error: `Too many images (max ${MAX_IMAGES})` }, 400);
+const tooLargeImage = () => json({ ok: false, error: "Image too large (max 15MB each)" }, 413);
+
+// surface a missing migration clearly instead of a generic "Save failed"
+const dbError = (err, fallback) =>
+  /no such column/i.test(String(err && err.message))
+    ? "Database migration missing — apply worker/migrations/0001_multiple_images.sql"
+    : fallback;
+
 async function handleEntryCreate(request, env) {
   try {
     const form = await request.formData();
     const entryDate = String(form.get("entry_date") || "").trim();
     const note = String(form.get("note") || "").trim().slice(0, NOTE_MAX);
-    const file = form.get("image");
-    const hasImage = file && typeof file === "object" && file.size > 0;
+    const files = imageFiles(form);
 
     if (!DATE_RE.test(entryDate)) return json({ ok: false, error: "Invalid date" }, 400);
-    if (!note && !hasImage) return json({ ok: false, error: "Add a note or an image" }, 400);
-    if (hasImage && file.size > MAX_IMG_BYTES) return json({ ok: false, error: "Image too large (max 15MB)" }, 413);
+    if (!note && !files.length) return json({ ok: false, error: "Add a note or an image" }, 400);
+    if (files.length > MAX_IMAGES) return tooManyImages();
+    if (files.some((f) => f.size > MAX_IMG_BYTES)) return tooLargeImage();
 
-    let imageKey = null;
-    if (hasImage) {
-      imageKey = `img-${entryDate}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${imageExt(file.name, file.type)}`;
-      try {
-        await env.MEDIA.put(imageKey, new Uint8Array(await file.arrayBuffer()), {
-          metadata: { contentType: file.type || "application/octet-stream" },
-        });
-      } catch (err) {
-        await env.MEDIA.delete(imageKey).catch(() => {});
-        return json({ ok: false, error: "Image upload failed" }, 500);
-      }
+    let imageKeys = [];
+    try {
+      imageKeys = await storeImages(env, entryDate, files);
+    } catch {
+      return json({ ok: false, error: "Image upload failed" }, 500);
     }
 
     try {
       const res = await env.DB
-        .prepare("INSERT INTO entries (entry_date, note, image_key) VALUES (?, ?, ?)")
-        .bind(entryDate, note, imageKey)
+        .prepare("INSERT INTO entries (entry_date, note, image_key, images) VALUES (?, ?, ?, ?)")
+        .bind(entryDate, note, imageKeys[0] ?? null, JSON.stringify(imageKeys))
         .run();
       return json({
         ok: true,
-        entry: { id: res.meta.last_row_id, entry_date: entryDate, note, image_key: imageKey },
+        entry: {
+          id: res.meta.last_row_id,
+          entry_date: entryDate,
+          note,
+          image_key: imageKeys[0] ?? null,
+          images: imageKeys,
+        },
       });
     } catch (err) {
-      if (imageKey) await env.MEDIA.delete(imageKey).catch(() => {}); // avoid orphan blobs
-      return json({ ok: false, error: "Save failed" }, 500);
+      await deleteImages(env, imageKeys); // DB unchanged, drop the uploaded blobs
+      return json({ ok: false, error: dbError(err, "Save failed") }, 500);
     }
   } catch {
     return json({ ok: false, error: "Invalid form data" }, 400);
@@ -268,63 +337,77 @@ async function handleEntryCreate(request, env) {
 }
 
 /*
- * PUT semantics: entry_date + note are set; image resolved as
- *   - new file provided  -> replace (new KV object, old one deleted after success)
- *   - image_action=remove -> image_key NULL + KV object deleted
- *   - otherwise          -> keep existing image
+ * PUT semantics: entry_date + note are set; the image list is resolved as
+ *   - image_action=remove -> remove every existing image (legacy full clear)
+ *   - remove_images=[...] -> drop those specific keys
+ *   - new `image` files   -> appended after the kept images
+ *   - otherwise           -> existing images are kept as-is
+ * Removed KV objects are deleted only after the D1 update commits.
  */
 async function handleEntryUpdate(request, env) {
   try {
     const id = Number(new URL(request.url).pathname.split("/").pop());
     if (!Number.isInteger(id) || id <= 0) return json({ ok: false, error: "Bad id" }, 400);
-    const row = await env.DB.prepare("SELECT image_key FROM entries WHERE id = ?").bind(id).first();
+    let row;
+    try {
+      row = await env.DB.prepare("SELECT image_key, images FROM entries WHERE id = ?").bind(id).first();
+    } catch (err) {
+      return json({ ok: false, error: dbError(err, "Could not load entry") }, 500);
+    }
     if (!row) return json({ ok: false, error: "Not found" }, 404);
 
     const form = await request.formData();
     const entryDate = String(form.get("entry_date") || "").trim();
     const note = String(form.get("note") || "").trim().slice(0, NOTE_MAX);
     const imageAction = String(form.get("image_action") || "keep"); // "keep" | "remove"
-    const file = form.get("image");
-    const hasNewImage = file && typeof file === "object" && file.size > 0;
+    const files = imageFiles(form);
 
     if (!DATE_RE.test(entryDate)) return json({ ok: false, error: "Invalid date" }, 400);
-    if (hasNewImage && file.size > MAX_IMG_BYTES) return json({ ok: false, error: "Image too large (max 15MB)" }, 413);
+    if (files.length > MAX_IMAGES) return tooManyImages();
+    if (files.some((f) => f.size > MAX_IMG_BYTES)) return tooLargeImage();
 
-    const removingImage = imageAction === "remove" && row.image_key;
-    if (!note && !hasNewImage && !removingImage && !row.image_key) {
-      return json({ ok: false, error: "Add a note or an image" }, 400);
+    const current = parseImageKeys(row);
+    const removeSet = new Set(removeImageKeys(form));
+    const kept = imageAction === "remove" ? [] : current.filter((key) => !removeSet.has(key));
+    if (kept.length + files.length > MAX_IMAGES) return tooManyImages();
+
+    // never leave a completely empty entry behind (e.g. deleting the last
+    // image of an image-only note) — delete the entry instead
+    if (!note && kept.length + files.length === 0) {
+      return json({ ok: false, error: "Add a note or an image (or delete the entry)" }, 400);
     }
 
-    let oldKey = row.image_key;
-    let newKey = row.image_key;
-    if (imageAction === "remove" && !hasNewImage) newKey = null;
-
-    if (hasNewImage) {
-      newKey = `img-${entryDate}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${imageExt(file.name, file.type)}`;
-      try {
-        await env.MEDIA.put(newKey, new Uint8Array(await file.arrayBuffer()), {
-          metadata: { contentType: file.type || "application/octet-stream" },
-        });
-      } catch (err) {
-        await env.MEDIA.delete(newKey).catch(() => {});
-        return json({ ok: false, error: "Image upload failed" }, 500);
-      }
+    let newKeys = [];
+    try {
+      newKeys = await storeImages(env, entryDate, files);
+    } catch {
+      return json({ ok: false, error: "Image upload failed" }, 500);
     }
 
+    const finalKeys = [...kept, ...newKeys];
     try {
       await env.DB
-        .prepare("UPDATE entries SET entry_date = ?, note = ?, image_key = ? WHERE id = ?")
-        .bind(entryDate, note, newKey, id)
+        .prepare("UPDATE entries SET entry_date = ?, note = ?, image_key = ?, images = ? WHERE id = ?")
+        .bind(entryDate, note, finalKeys[0] ?? null, JSON.stringify(finalKeys), id)
         .run();
     } catch (err) {
-      if (hasNewImage) await env.MEDIA.delete(newKey).catch(() => {}); // DB unchanged, drop the new blob
-      return json({ ok: false, error: "Save failed" }, 500);
+      await deleteImages(env, newKeys); // DB unchanged, drop the new blobs
+      return json({ ok: false, error: dbError(err, "Save failed") }, 500);
     }
 
-    // DB committed: safe to delete the replaced KV object now
-    if (oldKey && oldKey !== newKey) await env.MEDIA.delete(oldKey).catch(() => {});
+    // DB committed: safe to delete the KV objects no longer referenced
+    await deleteImages(env, current.filter((key) => !finalKeys.includes(key)));
 
-    return json({ ok: true, entry: { id: id, entry_date: entryDate, note: note, image_key: newKey } });
+    return json({
+      ok: true,
+      entry: {
+        id,
+        entry_date: entryDate,
+        note,
+        image_key: finalKeys[0] ?? null,
+        images: finalKeys,
+      },
+    });
   } catch {
     return json({ ok: false, error: "Invalid form data" }, 400);
   }
@@ -333,10 +416,17 @@ async function handleEntryUpdate(request, env) {
 async function handleEntryList(env) {
   try {
     const { results } = await env.DB
-      .prepare("SELECT id, entry_date, note, image_key, created_at FROM entries ORDER BY entry_date DESC, id DESC LIMIT 200")
+      .prepare("SELECT id, entry_date, note, image_key, images, created_at FROM entries ORDER BY entry_date DESC, id DESC LIMIT 200")
       .all();
-    return json({ ok: true, entries: results });
-  } catch {
+    return json({ ok: true, entries: results.map((row) => ({ ...row, images: parseImageKeys(row) })) });
+  } catch (err) {
+    if (/no such column/i.test(String(err && err.message))) {
+      // pre-migration DB: still serve rows using the single legacy image column
+      const { results } = await env.DB
+        .prepare("SELECT id, entry_date, note, image_key, created_at FROM entries ORDER BY entry_date DESC, id DESC LIMIT 200")
+        .all();
+      return json({ ok: true, entries: results.map((row) => ({ ...row, images: parseImageKeys(row) })) });
+    }
     return json({ ok: false, error: "Could not load entries" }, 500);
   }
 }
@@ -345,9 +435,14 @@ async function handleEntryDelete(request, env) {
   try {
     const id = Number(new URL(request.url).pathname.split("/").pop());
     if (!Number.isInteger(id) || id <= 0) return json({ ok: false, error: "Bad id" }, 400);
-    const row = await env.DB.prepare("SELECT image_key FROM entries WHERE id = ?").bind(id).first();
+    let row;
+    try {
+      row = await env.DB.prepare("SELECT image_key, images FROM entries WHERE id = ?").bind(id).first();
+    } catch {
+      row = await env.DB.prepare("SELECT image_key FROM entries WHERE id = ?").bind(id).first();
+    }
     if (!row) return json({ ok: false, error: "Not found" }, 404);
-    if (row.image_key) await env.MEDIA.delete(row.image_key).catch(() => {});
+    await deleteImages(env, parseImageKeys(row));
     await env.DB.prepare("DELETE FROM entries WHERE id = ?").bind(id).run();
     return json({ ok: true });
   } catch {

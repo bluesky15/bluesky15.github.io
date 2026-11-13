@@ -9,7 +9,10 @@ CREATE TABLE IF NOT EXISTS entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_date TEXT NOT NULL,
   note TEXT DEFAULT '',
+  -- legacy single-image column; mirrors the first key in images
   image_key TEXT,
+  -- JSON array of KV keys, in display order (see worker/migrations)
+  images TEXT NOT NULL DEFAULT '[]',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
