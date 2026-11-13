@@ -18,6 +18,8 @@ routes = [
   { pattern = "onlinelkb.in/logout*", zone_name = "onlinelkb.in" },
   { pattern = "onlinelkb.in/api/entries*", zone_name = "onlinelkb.in" },
   { pattern = "onlinelkb.in/img/*", zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/trade_journal*", zone_name = "onlinelkb.in" },
+  { pattern = "onlinelkb.in/api/trade_journal*", zone_name = "onlinelkb.in" },
 ]
 
 [[d1_databases]]

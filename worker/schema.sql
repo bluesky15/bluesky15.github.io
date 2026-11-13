@@ -26,3 +26,10 @@ CREATE TABLE IF NOT EXISTS login_failures (
   locked_until INTEGER NOT NULL DEFAULT 0,
   updated_at INTEGER NOT NULL DEFAULT 0
 );
+
+-- 100-day trading journal state per user
+CREATE TABLE IF NOT EXISTS trade_journal (
+  user_id TEXT PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);

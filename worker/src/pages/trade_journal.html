@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>100-Day Trading Journal · onlinelkb.in</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-dark: #0284c7;
+      --profit: #10b981;
+      --loss: #f43f5e;
+      --accent-orange: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px 16px 64px;
+      line-height: 1.5;
+    }
+    .app { max-width: 1400px; margin: 0 auto; }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+    }
+    .topbar .brand { font-size: 18px; font-weight: 600; margin: 0; }
+    .tabs { display: flex; gap: 8px; align-items: center; }
+    .tab {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab:hover { color: var(--text); border-color: #475569; }
+    .tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #0f172a;
+      font-weight: 600;
+    }
+    .who { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+    .who strong { color: var(--text); font-weight: 600; }
+    .who a { color: #f87171; text-decoration: none; }
+    .who a:hover { text-decoration: underline; }
+
+    /* Summary KPI Grid */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .kpi-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+    .kpi-card.highlight {
+      border-color: #0284c7;
+      background: linear-gradient(180deg, #1e293b 0%, #172554 100%);
+    }
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .kpi-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .text-profit { color: var(--profit) !important; }
+    .text-loss { color: var(--loss) !important; }
+    .text-orange { color: var(--accent-orange) !important; }
+
+    /* Action bar */
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+    }
+    .action-left, .action-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .search-input {
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 7px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      width: 220px;
+      outline: none;
+    }
+    .search-input:focus { border-color: var(--primary); }
+    .btn {
+      background: #263449;
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: var(--primary); color: #fff; }
+    .btn-primary { background: var(--primary); color: #0f172a; border-color: var(--primary); font-weight: 600; }
+    .btn-primary:hover { background: #7dd3fc; border-color: #7dd3fc; color: #0f172a; }
+    .btn-danger { color: #f87171; }
+    .btn-danger:hover { border-color: #f87171; color: #fff; background: rgba(248,113,113,0.15); }
+    .sync-status {
+      font-size: 12px;
+      color: var(--profit);
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    /* Table Container */
+    .table-container {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+    }
+    .table-scroll {
+      max-height: calc(100vh - 340px);
+      overflow: auto;
+      scrollbar-width: thin;
+      scrollbar-color: #475569 transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      text-align: left;
+    }
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: #111827;
+      color: #94a3b8;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 12px 10px;
+      border-bottom: 2px solid var(--panel-border);
+      white-space: nowrap;
+    }
+    tbody tr {
+      border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+      transition: background 0.15s ease;
+    }
+    tbody tr:hover { background: rgba(56, 189, 248, 0.04); }
+    tbody tr.active-today {
+      background: rgba(56, 189, 248, 0.08);
+      outline: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    tbody td {
+      padding: 8px 10px;
+      vertical-align: middle;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .col-trade { text-align: center; font-weight: 600; color: #94a3b8; width: 65px; }
+    .col-date { text-align: center; color: #cbd5e1; width: 95px; }
+    .col-day { text-align: center; color: #38bdf8; font-weight: 500; width: 85px; }
+    .col-cur { text-align: right; width: 130px; font-weight: 500; }
+    .col-inp { width: 130px; }
+    .col-pct { text-align: right; width: 100px; font-weight: 600; }
+    .col-notes { width: auto; min-width: 200px; }
+
+    /* Inputs in table */
+    .cell-input {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-family: inherit;
+      font-size: 13px;
+      text-align: right;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .cell-input:focus { border-color: var(--primary); background: #172554; }
+    .cell-notes-input {
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Modal for Initial Capital */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.8);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-box {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5);
+    }
+    .modal-title { font-size: 17px; font-weight: 600; margin: 0 0 12px; }
+    .modal-body label { display: block; font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+    @media (max-width: 900px) {
+      .topbar { gap: 10px; padding: 10px 12px; }
+      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+      .table-scroll { max-height: calc(100vh - 420px); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Topbar -->
+    <header class="topbar">
+      <h1 class="brand">Private tools</h1>
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <a href="/hello" class="tab">📝 My notes</a>
+        <span class="tab active" aria-current="page">📈 Trading Journal</span>
+      </nav>
+      <span class="who">Signed in as <strong>{{USERNAME}}</strong> 👋 · <a href="/logout">log out</a></span>
+    </header>
+
+    <!-- KPI Summary Cards -->
+    <section class="summary-grid" id="kpi-grid">
+      <div class="kpi-card" id="card-initial" style="cursor: pointer;" title="Click to edit initial capital">
+        <div class="kpi-label">Initial Capital (₹) ✏️</div>
+        <div class="kpi-val" id="kpi-initial">₹84,000.00</div>
+        <div class="kpi-sub">Day 1 starting equity</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">New Deposits (₹)</div>
+        <div class="kpi-val text-profit" id="kpi-deposits">₹0.00</div>
+        <div class="kpi-sub">Fresh capital additions</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Invested (₹)</div>
+        <div class="kpi-val" id="kpi-invested">₹84,000.00</div>
+        <div class="kpi-sub">Principal deployed</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Trading P/L (₹)</div>
+        <div class="kpi-val text-profit" id="kpi-pnl">+₹9,000.00</div>
+        <div class="kpi-sub" id="kpi-pnl-sub">Net profits generated</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Withdrawn (₹)</div>
+        <div class="kpi-val text-orange" id="kpi-withdrawn">₹0.00</div>
+        <div class="kpi-sub" id="kpi-withdrawn-pct">0.00% of capital pool</div>
+      </div>
+      <div class="kpi-card highlight">
+        <div class="kpi-label" style="color: #38bdf8;">Current Balance (₹)</div>
+        <div class="kpi-val" id="kpi-balance" style="color: #38bdf8;">₹93,000.00</div>
+        <div class="kpi-sub">Net live account equity</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Overall ROI (%)</div>
+        <div class="kpi-val text-profit" id="kpi-roi">+10.71%</div>
+        <div class="kpi-sub">Return on invested capital</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Progress</div>
+        <div class="kpi-val" id="kpi-progress">1 / 100</div>
+        <div class="kpi-sub">Trading days completed</div>
+      </div>
+    </section>
+
+    <!-- Action Bar -->
+    <div class="action-bar">
+      <div class="action-left">
+        <input type="text" class="search-input" id="search-input" placeholder="🔍 Search Date, Day, or Note..." />
+        <button type="button" class="btn" id="btn-jump-next">⚡ Jump to Next Day</button>
+        <span class="sync-status" id="sync-status">● Cloud Synced</span>
+      </div>
+      <div class="action-right">
+        <button type="button" class="btn btn-primary" id="btn-save">💾 Save to Cloud</button>
+        <button type="button" class="btn" id="btn-export-csv">📥 Export CSV</button>
+        <button type="button" class="btn btn-danger" id="btn-reset">↺ Reset</button>
+      </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="table-container">
+      <div class="table-scroll" id="table-scroll">
+        <table id="journal-table">
+          <thead>
+            <tr>
+              <th class="col-trade">Trade #</th>
+              <th class="col-date">Date</th>
+              <th class="col-day">Day</th>
+              <th class="col-cur">Starting (₹)</th>
+              <th class="col-inp">New Deposit (₹)</th>
+              <th class="col-inp">Daily P/L (₹)</th>
+              <th class="col-pct">Daily Return</th>
+              <th class="col-inp">Withdrawal (₹)</th>
+              <th class="col-pct">Withdr. %</th>
+              <th class="col-cur">Current Balance (₹)</th>
+              <th class="col-notes">Notes & Strategy</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <!-- Rendered by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Initial Capital Modal -->
+  <div class="modal-backdrop" id="capital-modal" hidden>
+    <div class="modal-box">
+      <h3 class="modal-title">Edit Initial Investment</h3>
+      <div class="modal-body">
+        <label for="initial-capital-input">Starting Capital (INR ₹):</label>
+        <input type="number" id="initial-capital-input" class="cell-input" style="text-align: left; padding: 10px; font-size: 16px;" value="84000" />
+        <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0;">
+          This is your one-time starting capital. It automatically initializes Day 1 and recalibrates all subsequent days.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" id="modal-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary" id="modal-save">Update Capital</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const NSE_DAYS = [{"trade": 1, "date": "2026-11-13", "day": "Friday"}, {"trade": 2, "date": "2026-11-16", "day": "Monday"}, {"trade": 3, "date": "2026-11-17", "day": "Tuesday"}, {"trade": 4, "date": "2026-11-18", "day": "Wednesday"}, {"trade": 5, "date": "2026-11-19", "day": "Thursday"}, {"trade": 6, "date": "2026-11-20", "day": "Friday"}, {"trade": 7, "date": "2026-11-23", "day": "Monday"}, {"trade": 8, "date": "2026-11-25", "day": "Wednesday"}, {"trade": 9, "date": "2026-11-26", "day": "Thursday"}, {"trade": 10, "date": "2026-11-27", "day": "Friday"}, {"trade": 11, "date": "2026-11-30", "day": "Monday"}, {"trade": 12, "date": "2026-12-01", "day": "Tuesday"}, {"trade": 13, "date": "2026-12-02", "day": "Wednesday"}, {"trade": 14, "date": "2026-12-03", "day": "Thursday"}, {"trade": 15, "date": "2026-12-04", "day": "Friday"}, {"trade": 16, "date": "2026-12-07", "day": "Monday"}, {"trade": 17, "date": "2026-12-08", "day": "Tuesday"}, {"trade": 18, "date": "2026-12-09", "day": "Wednesday"}, {"trade": 19, "date": "2026-12-10", "day": "Thursday"}, {"trade": 20, "date": "2026-12-11", "day": "Friday"}, {"trade": 21, "date": "2026-12-14", "day": "Monday"}, {"trade": 22, "date": "2026-12-15", "day": "Tuesday"}, {"trade": 23, "date": "2026-12-16", "day": "Wednesday"}, {"trade": 24, "date": "2026-12-17", "day": "Thursday"}, {"trade": 25, "date": "2026-12-18", "day": "Friday"}, {"trade": 26, "date": "2026-12-21", "day": "Monday"}, {"trade": 27, "date": "2026-12-22", "day": "Tuesday"}, {"trade": 28, "date": "2026-12-23", "day": "Wednesday"}, {"trade": 29, "date": "2026-12-24", "day": "Thursday"}, {"trade": 30, "date": "2026-12-28", "day": "Monday"}, {"trade": 31, "date": "2026-12-29", "day": "Tuesday"}, {"trade": 32, "date": "2026-12-30", "day": "Wednesday"}, {"trade": 33, "date": "2026-12-31", "day": "Thursday"}, {"trade": 34, "date": "2027-01-01", "day": "Friday"}, {"trade": 35, "date": "2027-01-04", "day": "Monday"}, {"trade": 36, "date": "2027-01-05", "day": "Tuesday"}, {"trade": 37, "date": "2027-01-06", "day": "Wednesday"}, {"trade": 38, "date": "2027-01-07", "day": "Thursday"}, {"trade": 39, "date": "2027-01-08", "day": "Friday"}, {"trade": 40, "date": "2027-01-11", "day": "Monday"}, {"trade": 41, "date": "2027-01-12", "day": "Tuesday"}, {"trade": 42, "date": "2027-01-13", "day": "Wednesday"}, {"trade": 43, "date": "2027-01-14", "day": "Thursday"}, {"trade": 44, "date": "2027-01-15", "day": "Friday"}, {"trade": 45, "date": "2027-01-18", "day": "Monday"}, {"trade": 46, "date": "2027-01-19", "day": "Tuesday"}, {"trade": 47, "date": "2027-01-20", "day": "Wednesday"}, {"trade": 48, "date": "2027-01-21", "day": "Thursday"}, {"trade": 49, "date": "2027-01-22", "day": "Friday"}, {"trade": 50, "date": "2027-01-25", "day": "Monday"}, {"trade": 51, "date": "2027-01-27", "day": "Wednesday"}, {"trade": 52, "date": "2027-01-28", "day": "Thursday"}, {"trade": 53, "date": "2027-01-29", "day": "Friday"}, {"trade": 54, "date": "2027-02-01", "day": "Monday"}, {"trade": 55, "date": "2027-02-02", "day": "Tuesday"}, {"trade": 56, "date": "2027-02-03", "day": "Wednesday"}, {"trade": 57, "date": "2027-02-04", "day": "Thursday"}, {"trade": 58, "date": "2027-02-05", "day": "Friday"}, {"trade": 59, "date": "2027-02-08", "day": "Monday"}, {"trade": 60, "date": "2027-02-09", "day": "Tuesday"}, {"trade": 61, "date": "2027-02-10", "day": "Wednesday"}, {"trade": 62, "date": "2027-02-11", "day": "Thursday"}, {"trade": 63, "date": "2027-02-12", "day": "Friday"}, {"trade": 64, "date": "2027-02-15", "day": "Monday"}, {"trade": 65, "date": "2027-02-16", "day": "Tuesday"}, {"trade": 66, "date": "2027-02-17", "day": "Wednesday"}, {"trade": 67, "date": "2027-02-18", "day": "Thursday"}, {"trade": 68, "date": "2027-02-19", "day": "Friday"}, {"trade": 69, "date": "2027-02-22", "day": "Monday"}, {"trade": 70, "date": "2027-02-23", "day": "Tuesday"}, {"trade": 71, "date": "2027-02-24", "day": "Wednesday"}, {"trade": 72, "date": "2027-02-25", "day": "Thursday"}, {"trade": 73, "date": "2027-02-26", "day": "Friday"}, {"trade": 74, "date": "2027-03-01", "day": "Monday"}, {"trade": 75, "date": "2027-03-02", "day": "Tuesday"}, {"trade": 76, "date": "2027-03-03", "day": "Wednesday"}, {"trade": 77, "date": "2027-03-04", "day": "Thursday"}, {"trade": 78, "date": "2027-03-05", "day": "Friday"}, {"trade": 79, "date": "2027-03-08", "day": "Monday"}, {"trade": 80, "date": "2027-03-09", "day": "Tuesday"}, {"trade": 81, "date": "2027-03-11", "day": "Thursday"}, {"trade": 82, "date": "2027-03-12", "day": "Friday"}, {"trade": 83, "date": "2027-03-15", "day": "Monday"}, {"trade": 84, "date": "2027-03-16", "day": "Tuesday"}, {"trade": 85, "date": "2027-03-17", "day": "Wednesday"}, {"trade": 86, "date": "2027-03-18", "day": "Thursday"}, {"trade": 87, "date": "2027-03-19", "day": "Friday"}, {"trade": 88, "date": "2027-03-23", "day": "Tuesday"}, {"trade": 89, "date": "2027-03-24", "day": "Wednesday"}, {"trade": 90, "date": "2027-03-25", "day": "Thursday"}, {"trade": 91, "date": "2027-03-29", "day": "Monday"}, {"trade": 92, "date": "2027-03-30", "day": "Tuesday"}, {"trade": 93, "date": "2027-03-31", "day": "Wednesday"}, {"trade": 94, "date": "2027-04-01", "day": "Thursday"}, {"trade": 95, "date": "2027-04-02", "day": "Friday"}, {"trade": 96, "date": "2027-04-05", "day": "Monday"}, {"trade": 97, "date": "2027-04-06", "day": "Tuesday"}, {"trade": 98, "date": "2027-04-07", "day": "Wednesday"}, {"trade": 99, "date": "2027-04-08", "day": "Thursday"}, {"trade": 100, "date": "2027-04-09", "day": "Friday"}];
+
+    const STORAGE_KEY = "nse_trade_journal_data_v1";
+    let state = {
+      initialCapital: 84000,
+      days: {} // tradeNumber: { deposit, pnl, withdrawal, notes }
+    };
+
+    // Default Day 1
+    state.days[1] = {
+      deposit: "",
+      pnl: 9000,
+      withdrawal: "",
+      notes: "Day 1: Profit ₹9,000 (+10.71%)"
+    };
+
+    function formatINR(val, showPlus = false) {
+      if (val === "" || val === null || val === undefined || isNaN(val)) return "—";
+      const num = Number(val);
+      const isNeg = num < 0;
+      const absVal = Math.abs(num);
+      const formatted = absVal.toLocaleString("en-IN", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      if (isNeg) return "−₹" + formatted;
+      if (showPlus && num > 0) return "+₹" + formatted;
+      return "₹" + formatted;
+    }
+
+    function formatPct(val) {
+      if (val === "" || val === null || val === undefined || isNaN(val)) return "—";
+      const num = Number(val);
+      const sign = num > 0 ? "+" : "";
+      return sign + (num * 100).toFixed(2) + "%";
+    }
+
+    // Load from LocalStorage and Cloud
+    function loadLocal() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.initialCapital === "number") {
+            state = parsed;
+          }
+        }
+      } catch (e) {
+        console.warn("Could not load local state", e);
+      }
+    }
+
+    async function loadCloud() {
+      try {
+        const res = await fetch("/api/trade_journal");
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.ok && json.data) {
+            state = json.data;
+            saveLocal();
+            render();
+            setSyncStatus(true);
+          }
+        }
+      } catch (e) {
+        console.warn("Cloud load failed, using local", e);
+      }
+    }
+
+    function saveLocal() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {}
+    }
+
+    let saveTimeout = null;
+    function queueCloudSave() {
+      setSyncStatus(false, "Saving...");
+      saveLocal();
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch("/api/trade_journal", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(state)
+          });
+          if (res.ok) {
+            setSyncStatus(true);
+          } else {
+            setSyncStatus(false, "Local saved (offline)");
+          }
+        } catch {
+          setSyncStatus(false, "Local saved (offline)");
+        }
+      }, 800);
+    }
+
+    function setSyncStatus(synced, text) {
+      const el = document.getElementById("sync-status");
+      if (!el) return;
+      if (synced) {
+        el.style.color = "var(--profit)";
+        el.textContent = "● Cloud Synced";
+      } else {
+        el.style.color = "var(--accent-orange)";
+        el.textContent = "● " + (text || "Unsaved");
+      }
+    }
+
+    // Recalculate 100 days
+    function computeAll() {
+      let currentBal = Number(state.initialCapital) || 0;
+      let totalDeposits = 0;
+      let totalPnL = 0;
+      let totalWithdrawals = 0;
+      let completedDays = 0;
+
+      const computedRows = [];
+
+      for (let i = 0; i < NSE_DAYS.length; i++) {
+        const item = NSE_DAYS[i];
+        const tradeNo = item.trade;
+        const entry = state.days[tradeNo] || { deposit: "", pnl: "", withdrawal: "", notes: "" };
+
+        const startBal = currentBal;
+        const dep = entry.deposit !== "" && entry.deposit !== null && !isNaN(entry.deposit) ? Number(entry.deposit) : null;
+        const pnl = entry.pnl !== "" && entry.pnl !== null && !isNaN(entry.pnl) ? Number(entry.pnl) : null;
+        const wdl = entry.withdrawal !== "" && entry.withdrawal !== null && !isNaN(entry.withdrawal) ? Number(entry.withdrawal) : null;
+
+        if (dep !== null) totalDeposits += dep;
+        if (pnl !== null) totalPnL += pnl;
+        if (wdl !== null) totalWithdrawals += wdl;
+
+        const capAtRisk = startBal + (dep || 0);
+        const returnPct = pnl !== null && capAtRisk > 0 ? (pnl / capAtRisk) : null;
+        const withdrPct = wdl !== null && capAtRisk > 0 ? (wdl / capAtRisk) : null;
+
+        const hasActivity = dep !== null || pnl !== null || wdl !== null;
+        if (pnl !== null) completedDays++;
+
+        let endBal = null;
+        if (hasActivity) {
+          endBal = startBal + (dep || 0) + (pnl || 0) - (wdl || 0);
+          currentBal = endBal;
+        }
+
+        computedRows.push({
+          trade: tradeNo,
+          date: item.date,
+          day: item.day,
+          startBal,
+          deposit: entry.deposit ?? "",
+          pnl: entry.pnl ?? "",
+          returnPct,
+          withdrawal: entry.withdrawal ?? "",
+          withdrPct,
+          endBal,
+          notes: entry.notes || "",
+          hasActivity
+        });
+      }
+
+      const totalInvested = (Number(state.initialCapital) || 0) + totalDeposits;
+      const overallROI = totalInvested > 0 ? (totalPnL / totalInvested) : 0;
+      const totalCapitalPool = totalInvested + totalPnL;
+      const totalWithdrPct = totalCapitalPool > 0 ? (totalWithdrawals / totalCapitalPool) : 0;
+
+      return {
+        rows: computedRows,
+        summary: {
+          initial: Number(state.initialCapital) || 0,
+          totalDeposits,
+          totalInvested,
+          totalPnL,
+          totalWithdrawals,
+          totalWithdrPct,
+          currentBal,
+          overallROI,
+          completedDays
+        }
+      };
+    }
+
+    function render() {
+      const { rows, summary } = computeAll();
+
+      // Update KPI cards
+      document.getElementById("kpi-initial").textContent = formatINR(summary.initial);
+      document.getElementById("kpi-deposits").textContent = formatINR(summary.totalDeposits, true);
+      document.getElementById("kpi-invested").textContent = formatINR(summary.totalInvested);
+
+      const pnlEl = document.getElementById("kpi-pnl");
+      pnlEl.textContent = formatINR(summary.totalPnL, true);
+      pnlEl.className = "kpi-val " + (summary.totalPnL >= 0 ? "text-profit" : "text-loss");
+
+      document.getElementById("kpi-withdrawn").textContent = formatINR(summary.totalWithdrawals);
+      document.getElementById("kpi-withdrawn-pct").textContent = (summary.totalWithdrPct * 100).toFixed(2) + "% of capital pool";
+
+      const balEl = document.getElementById("kpi-balance");
+      balEl.textContent = formatINR(summary.currentBal);
+
+      const roiEl = document.getElementById("kpi-roi");
+      roiEl.textContent = formatPct(summary.overallROI);
+      roiEl.className = "kpi-val " + (summary.overallROI >= 0 ? "text-profit" : "text-loss");
+
+      document.getElementById("kpi-progress").textContent = summary.completedDays + " / 100";
+
+      // Render table rows
+      const tbody = document.getElementById("table-body");
+      const searchVal = (document.getElementById("search-input").value || "").toLowerCase().trim();
+
+      const frag = document.createDocumentFragment();
+
+      rows.forEach((r) => {
+        if (searchVal) {
+          const matchStr = (r.trade + " " + r.date + " " + r.day + " " + r.notes).toLowerCase();
+          if (!matchStr.includes(searchVal)) return;
+        }
+
+        const tr = document.createElement("tr");
+        if (r.trade === 1) tr.classList.add("active-today");
+
+        // Trade #
+        const tdTrade = document.createElement("td");
+        tdTrade.className = "col-trade";
+        tdTrade.textContent = "Day " + r.trade;
+        tr.appendChild(tdTrade);
+
+        // Date
+        const tdDate = document.createElement("td");
+        tdDate.className = "col-date";
+        tdDate.textContent = r.date;
+        tr.appendChild(tdDate);
+
+        // Day
+        const tdDay = document.createElement("td");
+        tdDay.className = "col-day";
+        tdDay.textContent = r.day;
+        tr.appendChild(tdDay);
+
+        // Starting Bal
+        const tdStart = document.createElement("td");
+        tdStart.className = "col-cur";
+        tdStart.textContent = formatINR(r.startBal);
+        tr.appendChild(tdStart);
+
+        // New Deposit
+        const tdDep = document.createElement("td");
+        tdDep.className = "col-inp";
+        const inDep = document.createElement("input");
+        inDep.type = "number";
+        inDep.step = "any";
+        inDep.className = "cell-input";
+        inDep.placeholder = "—";
+        inDep.value = r.deposit;
+        inDep.addEventListener("input", (e) => onCellChange(r.trade, "deposit", e.target.value));
+        tdDep.appendChild(inDep);
+        tr.appendChild(tdDep);
+
+        // Daily P/L
+        const tdPnl = document.createElement("td");
+        tdPnl.className = "col-inp";
+        const inPnl = document.createElement("input");
+        inPnl.type = "number";
+        inPnl.step = "any";
+        inPnl.className = "cell-input";
+        inPnl.placeholder = "—";
+        inPnl.value = r.pnl;
+        if (r.pnl !== "" && !isNaN(r.pnl)) {
+          inPnl.style.color = Number(r.pnl) >= 0 ? "var(--profit)" : "var(--loss)";
+        }
+        inPnl.addEventListener("input", (e) => onCellChange(r.trade, "pnl", e.target.value));
+        tdPnl.appendChild(inPnl);
+        tr.appendChild(tdPnl);
+
+        // Daily Return %
+        const tdRet = document.createElement("td");
+        tdRet.className = "col-pct";
+        if (r.returnPct !== null) {
+          tdRet.textContent = formatPct(r.returnPct);
+          tdRet.className += r.returnPct >= 0 ? " text-profit" : " text-loss";
+        } else {
+          tdRet.textContent = "—";
+        }
+        tr.appendChild(tdRet);
+
+        // Withdrawal
+        const tdWdl = document.createElement("td");
+        tdWdl.className = "col-inp";
+        const inWdl = document.createElement("input");
+        inWdl.type = "number";
+        inWdl.step = "any";
+        inWdl.className = "cell-input";
+        inWdl.placeholder = "—";
+        inWdl.value = r.withdrawal;
+        if (r.withdrawal !== "" && !isNaN(r.withdrawal) && Number(r.withdrawal) > 0) {
+          inWdl.style.color = "var(--accent-orange)";
+        }
+        inWdl.addEventListener("input", (e) => onCellChange(r.trade, "withdrawal", e.target.value));
+        tdWdl.appendChild(inWdl);
+        tr.appendChild(tdWdl);
+
+        // Withdrawal %
+        const tdWpct = document.createElement("td");
+        tdWpct.className = "col-pct";
+        tdWpct.textContent = r.withdrPct !== null ? (r.withdrPct * 100).toFixed(2) + "%" : "—";
+        if (r.withdrPct !== null && r.withdrPct > 0) tdWpct.className += " text-orange";
+        tr.appendChild(tdWpct);
+
+        // Current Balance
+        const tdEnd = document.createElement("td");
+        tdEnd.className = "col-cur";
+        tdEnd.style.fontWeight = "600";
+        tdEnd.textContent = r.endBal !== null ? formatINR(r.endBal) : "—";
+        tr.appendChild(tdEnd);
+
+        // Notes
+        const tdNotes = document.createElement("td");
+        tdNotes.className = "col-notes";
+        const inNotes = document.createElement("input");
+        inNotes.type = "text";
+        inNotes.className = "cell-input cell-notes-input";
+        inNotes.placeholder = "Notes & strategy...";
+        inNotes.value = r.notes;
+        inNotes.addEventListener("input", (e) => onCellChange(r.trade, "notes", e.target.value));
+        tdNotes.appendChild(inNotes);
+        tr.appendChild(tdNotes);
+
+        frag.appendChild(tr);
+      });
+
+      tbody.innerHTML = "";
+      tbody.appendChild(frag);
+    }
+
+    function onCellChange(tradeNo, field, value) {
+      if (!state.days[tradeNo]) {
+        state.days[tradeNo] = { deposit: "", pnl: "", withdrawal: "", notes: "" };
+      }
+      state.days[tradeNo][field] = value;
+      queueCloudSave();
+      render();
+    }
+
+    // Modal Initial Capital
+    const modal = document.getElementById("capital-modal");
+    document.getElementById("card-initial").addEventListener("click", () => {
+      document.getElementById("initial-capital-input").value = state.initialCapital;
+      modal.hidden = false;
+      document.getElementById("initial-capital-input").focus();
+    });
+    document.getElementById("modal-cancel").addEventListener("click", () => {
+      modal.hidden = true;
+    });
+    document.getElementById("modal-save").addEventListener("click", () => {
+      const val = Number(document.getElementById("initial-capital-input").value);
+      if (!isNaN(val) && val > 0) {
+        state.initialCapital = val;
+        queueCloudSave();
+        render();
+      }
+      modal.hidden = true;
+    });
+
+    // Jump to next untraded day
+    document.getElementById("btn-jump-next").addEventListener("click", () => {
+      const rows = document.querySelectorAll("#table-body tr");
+      for (let i = 0; i < rows.length; i++) {
+        const tradeNo = i + 1;
+        const entry = state.days[tradeNo];
+        if (!entry || (entry.pnl === "" && entry.deposit === "" && entry.withdrawal === "")) {
+          rows[i].scrollIntoView({ behavior: "smooth", block: "center" });
+          rows[i].style.outline = "2px solid var(--primary)";
+          setTimeout(() => { rows[i].style.outline = ""; }, 2000);
+          return;
+        }
+      }
+    });
+
+    // Search filter
+    document.getElementById("search-input").addEventListener("input", render);
+
+    // Save button
+    document.getElementById("btn-save").addEventListener("click", async () => {
+      setSyncStatus(false, "Saving to cloud...");
+      saveLocal();
+      try {
+        const res = await fetch("/api/trade_journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state)
+        });
+        if (res.ok) {
+          setSyncStatus(true);
+        } else {
+          alert("Save to cloud returned an error, data is saved locally.");
+        }
+      } catch (e) {
+        alert("Network issue, data is saved in local browser storage.");
+      }
+    });
+
+    // Reset button
+    document.getElementById("btn-reset").addEventListener("click", () => {
+      if (confirm("Reset trading journal to Day 1 default (₹84k initial, ₹9k profit)?")) {
+        state = {
+          initialCapital: 84000,
+          days: {
+            1: {
+              deposit: "",
+              pnl: 9000,
+              withdrawal: "",
+              notes: "Day 1: Profit ₹9,000 (+10.71%)"
+            }
+          }
+        };
+        queueCloudSave();
+        render();
+      }
+    });
+
+    // Export CSV
+    document.getElementById("btn-export-csv").addEventListener("click", () => {
+      const { rows, summary } = computeAll();
+      let csv = "Trade #,Date,Day,Starting Balance (INR),New Deposit (INR),Daily P/L (INR),Daily Return %,Withdrawal (INR),Withdrawal %,Current Balance (INR),Notes
+";
+      rows.forEach(r => {
+        csv += `Day ${r.trade},${r.date},${r.day},${r.startBal || 0},${r.deposit || ""},${r.pnl || ""},${r.returnPct !== null ? (r.returnPct*100).toFixed(2)+"%" : ""},${r.withdrawal || ""},${r.withdrPct !== null ? (r.withdrPct*100).toFixed(2)+"%" : ""},${r.endBal || ""},"${(r.notes||"").replace(/"/g, '""')}"
+`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `NSE_Trading_Journal_${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
+    // Init
+    loadLocal();
+    render();
+    loadCloud();
+  </script>
+</body>
+</html>

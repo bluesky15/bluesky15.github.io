@@ -130,6 +130,7 @@
       <nav class="tabs" role="tablist" aria-label="Private tools sections">
         <button type="button" class="tab active" id="tab-compose" role="tab" aria-selected="true">＋ New entry</button>
         <button type="button" class="tab" id="tab-notes" role="tab" aria-selected="false">My notes</button>
+        <a href="/trade_journal" class="tab" style="text-decoration:none; display:inline-flex; align-items:center; gap:6px;">📈 Trading Journal</a>
       </nav>
       <span class="who">Signed in as <strong>{{USERNAME}}</strong> 👋 · <a href="/logout">log out</a></span>
     </header>
@@ -166,6 +167,16 @@
     </section>
 
     <section id="view-notes" hidden>
+      <div style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; background:#1e293b; border:1px solid #334155; border-radius:12px; padding:12px 18px; flex-wrap:wrap; gap:10px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">📈</span>
+          <div>
+            <div style="font-weight:600; color:#e2e8f0; font-size:14px;">100-Day NSE Trading Journal</div>
+            <div style="color:#94a3b8; font-size:12px;">Track ₹84k initial capital, daily profit/loss, return %, withdrawals, and balances.</div>
+          </div>
+        </div>
+        <a href="/trade_journal" style="padding:7px 16px; border-radius:8px; background:#38bdf8; color:#0f172a; font-weight:600; font-size:13px; text-decoration:none; white-space:nowrap; display:inline-flex; align-items:center; gap:6px;">Open Trading Journal →</a>
+      </div>
       <div class="notes-layout">
         <div class="panel">
           <h2 id="list-title">List</h2>

@@ -37,6 +37,7 @@
 import loginTemplate from "./pages/login.html";
 import lockedTemplate from "./pages/locked.html";
 import adminTemplate from "./pages/admin.html";
+import tradeJournalTemplate from "./pages/trade_journal.html";
 
 const COOKIE = "lkb_session";
 const TTL_MS = 24 * 60 * 60 * 1000; // 1 day while testing
@@ -467,6 +468,39 @@ async function serveImage(request, env) {
   }
 }
 
+async function handleTradeJournalGet(request, env, username) {
+  try {
+    try {
+      await env.DB.prepare(
+        "CREATE TABLE IF NOT EXISTS trade_journal (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+      ).run();
+    } catch {}
+    const row = await env.DB.prepare("SELECT data FROM trade_journal WHERE user_id = ?").bind(username).first();
+    if (!row) return json({ ok: true, data: null });
+    return json({ ok: true, data: JSON.parse(row.data) });
+  } catch {
+    return json({ ok: false, error: "Could not load journal" }, 500);
+  }
+}
+
+async function handleTradeJournalSave(request, env, username) {
+  try {
+    const payload = await request.json();
+    if (!payload || typeof payload !== "object") return json({ ok: false, error: "Invalid payload" }, 400);
+    try {
+      await env.DB.prepare(
+        "CREATE TABLE IF NOT EXISTS trade_journal (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+      ).run();
+    } catch {}
+    await env.DB.prepare(
+      "INSERT INTO trade_journal (user_id, data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP"
+    ).bind(username, JSON.stringify(payload)).run();
+    return json({ ok: true });
+  } catch {
+    return json({ ok: false, error: "Save failed" }, 500);
+  }
+}
+
 /* ---------------- pages ---------------- */
 
 const page = (body) =>
@@ -500,6 +534,9 @@ const lockedPage = (remainMs) => {
 const adminPage = (username) =>
   page(fill(adminTemplate, { USERNAME: esc(username) }));
 
+const tradeJournalPage = (username) =>
+  page(fill(tradeJournalTemplate, { USERNAME: esc(username) }));
+
 
 /* ---------------- router ---------------- */
 
@@ -529,6 +566,19 @@ export default {
     if (pathname === "/hello") {
       const username = await readSession(request, env);
       return username ? adminPage(username) : Response.redirect(`${origin}/login`, 302);
+    }
+
+    if (pathname === "/trade_journal" || pathname === "/trade_journal/") {
+      const username = await readSession(request, env);
+      return username ? tradeJournalPage(username) : Response.redirect(`${origin}/login`, 302);
+    }
+
+    if (pathname === "/api/trade_journal" || pathname.startsWith("/api/trade_journal/")) {
+      const session = await readSession(request, env);
+      if (!session) return json({ ok: false, error: "Unauthorized" }, 401);
+      if (request.method === "GET") return handleTradeJournalGet(request, env, session);
+      if (request.method === "POST") return handleTradeJournalSave(request, env, session);
+      return json({ ok: false, error: "Method not allowed" }, 405);
     }
 
     if (pathname === "/api/entries" || pathname.startsWith("/api/entries/")) {
