@@ -814,8 +814,7 @@
     // Export CSV
     document.getElementById("btn-export-csv").addEventListener("click", () => {
       const { rows, summary } = computeAll();
-      let csv = "Trade #,Date,Day,Starting Balance (INR),New Deposit (INR),Daily P/L (INR),Daily Return %,Withdrawal (INR),Withdrawal %,Current Balance (INR),Notes
-";
+      let csv = "Trade #,Date,Day,Starting Balance (INR),New Deposit (INR),Daily P/L (INR),Daily Return %,Withdrawal (INR),Withdrawal %,Current Balance (INR),Notes\n";
       rows.forEach(r => {
         csv += `Day ${r.trade},${r.date},${r.day},${r.startBal || 0},${r.deposit || ""},${r.pnl || ""},${r.returnPct !== null ? (r.returnPct*100).toFixed(2)+"%" : ""},${r.withdrawal || ""},${r.withdrPct !== null ? (r.withdrPct*100).toFixed(2)+"%" : ""},${r.endBal || ""},"${(r.notes||"").replace(/"/g, '""')}"
 `;
