@@ -40,12 +40,13 @@
     .pending-date { font-size:13px; font-weight:600; color:#cbd5e1; }
     .pending-note { white-space:pre-wrap; margin:8px 0 0; font-size:15px; line-height:1.5; overflow-wrap:break-word; }
     .pending-frame { margin:12px 0 0; }
-    .thumb-grid { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
-    .thumb-grid img { display:block; width:auto; max-width:100%; max-height:150px; border-radius:8px;
+    .thumb-grid { display:flex; flex-wrap:nowrap; gap:8px; justify-content:flex-start;
+                  overflow-x:auto; overflow-y:hidden; padding:2px 2px 8px; }
+    .thumb-grid img { flex:0 0 auto; display:block; width:auto; max-width:100%; max-height:120px; border-radius:8px;
                       object-fit:contain; background:#0f172a; border:1px solid #334155; }
-    .existing-images { display:flex; flex-wrap:wrap; gap:8px; }
-    .existing-thumb { position:relative; display:inline-block; }
-    .existing-thumb img { display:block; width:auto; max-width:100%; max-height:110px; border-radius:8px;
+    .existing-images { display:flex; flex-wrap:nowrap; gap:8px; overflow-x:auto; overflow-y:hidden; padding-bottom:8px; }
+    .existing-thumb { position:relative; display:inline-block; flex:0 0 auto; }
+    .existing-thumb img { display:block; width:auto; max-width:100%; max-height:96px; border-radius:8px;
                           object-fit:contain; background:#0f172a; border:1px solid #334155; }
     .existing-thumb.removed img { opacity:.35; filter:grayscale(1); }
     .existing-thumb button { position:absolute; top:4px; right:4px; width:26px; height:26px; padding:0;
@@ -77,12 +78,21 @@
     .detail-date-note { }
     .detail-note { white-space:pre-wrap; font-size:16px; line-height:1.65; margin:0 0 16px; overflow-wrap:break-word; }
     .detail-note.muted { color:#64748b; font-size:14px; }
-    .detail-images { display:flex; flex-wrap:wrap; gap:10px; justify-content:center; }
-    .detail-thumb { position:relative; display:inline-block; line-height:0; }
+    .detail-images { display:flex; flex-wrap:nowrap; gap:8px; justify-content:flex-start;
+                     overflow-x:auto; overflow-y:hidden; padding:2px 2px 8px;
+                     scroll-snap-type:x proximity; }
+    .detail-thumb { position:relative; display:inline-block; flex:0 0 auto; line-height:0; scroll-snap-align:start; }
     .detail-images .thumb { padding:0; border:0; background:none; border-radius:10px; cursor:zoom-in; line-height:0; }
     .detail-images .thumb:focus-visible { outline:2px solid #38bdf8; outline-offset:2px; }
-    .detail-img { display:block; width:auto; max-width:100%; max-height:220px; border-radius:10px;
+    .detail-img { display:block; width:auto; max-width:100%; max-height:150px; border-radius:10px;
                   object-fit:contain; background:#0f172a; }
+    .thumb-grid, .existing-images, .detail-images { scrollbar-width:thin; scrollbar-color:#475569 transparent; }
+    .thumb-grid::-webkit-scrollbar, .existing-images::-webkit-scrollbar,
+    .detail-images::-webkit-scrollbar { height:8px; }
+    .thumb-grid::-webkit-scrollbar-thumb, .existing-images::-webkit-scrollbar-thumb,
+    .detail-images::-webkit-scrollbar-thumb { background:#475569; border-radius:999px; }
+    .thumb-grid::-webkit-scrollbar-track, .existing-images::-webkit-scrollbar-track,
+    .detail-images::-webkit-scrollbar-track { background:transparent; }
     .img-del { position:absolute; top:5px; right:5px; width:26px; height:26px; padding:0; border-radius:999px;
                border:1px solid #475569; background:rgba(15,23,42,.9); color:#f87171; font-size:13px;
                line-height:1; cursor:pointer; font-family:inherit; }
