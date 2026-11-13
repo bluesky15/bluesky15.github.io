@@ -253,6 +253,8 @@
       justify-content: center;
       z-index: 50;
     }
+    /* author display:flex above would otherwise override the UA [hidden] rule */
+    .modal-backdrop[hidden] { display: none; }
     .modal-box {
       background: var(--panel);
       border: 1px solid var(--panel-border);
@@ -379,6 +381,9 @@
         <input type="number" id="initial-capital-input" class="cell-input" style="text-align: left; padding: 10px; font-size: 16px;" value="84000" />
         <p style="font-size: 12px; color: var(--text-muted); margin: 8px 0 0;">
           This is your one-time starting capital. It automatically initializes Day 1 and recalibrates all subsequent days.
+        </p>
+        <p id="capital-error" style="font-size: 12px; color: #f87171; margin: 8px 0 0;" hidden>
+          Enter a starting capital greater than zero.
         </p>
       </div>
       <div class="modal-actions">
@@ -601,6 +606,19 @@
       const tbody = document.getElementById("table-body");
       const searchVal = (document.getElementById("search-input").value || "").toLowerCase().trim();
 
+      // Editing a cell re-renders the whole table; remember which input was
+      // focused so typing a multi-digit number does not lose focus after one key.
+      const active = document.activeElement;
+      const focusInfo =
+        active && tbody.contains(active) && active.dataset.field
+          ? {
+              trade: active.dataset.trade,
+              field: active.dataset.field,
+              start: active.selectionStart,
+              end: active.selectionEnd,
+            }
+          : null;
+
       const frag = document.createDocumentFragment();
 
       rows.forEach((r) => {
@@ -645,6 +663,8 @@
         inDep.className = "cell-input";
         inDep.placeholder = "—";
         inDep.value = r.deposit;
+        inDep.dataset.trade = r.trade;
+        inDep.dataset.field = "deposit";
         inDep.addEventListener("input", (e) => onCellChange(r.trade, "deposit", e.target.value));
         tdDep.appendChild(inDep);
         tr.appendChild(tdDep);
@@ -658,6 +678,8 @@
         inPnl.className = "cell-input";
         inPnl.placeholder = "—";
         inPnl.value = r.pnl;
+        inPnl.dataset.trade = r.trade;
+        inPnl.dataset.field = "pnl";
         if (r.pnl !== "" && !isNaN(r.pnl)) {
           inPnl.style.color = Number(r.pnl) >= 0 ? "var(--profit)" : "var(--loss)";
         }
@@ -685,6 +707,8 @@
         inWdl.className = "cell-input";
         inWdl.placeholder = "—";
         inWdl.value = r.withdrawal;
+        inWdl.dataset.trade = r.trade;
+        inWdl.dataset.field = "withdrawal";
         if (r.withdrawal !== "" && !isNaN(r.withdrawal) && Number(r.withdrawal) > 0) {
           inWdl.style.color = "var(--accent-orange)";
         }
@@ -714,6 +738,8 @@
         inNotes.className = "cell-input cell-notes-input";
         inNotes.placeholder = "Notes & strategy...";
         inNotes.value = r.notes;
+        inNotes.dataset.trade = r.trade;
+        inNotes.dataset.field = "notes";
         inNotes.addEventListener("input", (e) => onCellChange(r.trade, "notes", e.target.value));
         tdNotes.appendChild(inNotes);
         tr.appendChild(tdNotes);
@@ -723,6 +749,20 @@
 
       tbody.innerHTML = "";
       tbody.appendChild(frag);
+
+      if (focusInfo) {
+        const el = tbody.querySelector(
+          `input[data-trade="${focusInfo.trade}"][data-field="${focusInfo.field}"]`,
+        );
+        if (el) {
+          el.focus();
+          if (typeof focusInfo.start === "number") {
+            try {
+              el.setSelectionRange(focusInfo.start, focusInfo.end);
+            } catch {}
+          }
+        }
+      }
     }
 
     function onCellChange(tradeNo, field, value) {
@@ -736,22 +776,50 @@
 
     // Modal Initial Capital
     const modal = document.getElementById("capital-modal");
-    document.getElementById("card-initial").addEventListener("click", () => {
-      document.getElementById("initial-capital-input").value = state.initialCapital;
+    const capitalInput = document.getElementById("initial-capital-input");
+    const capitalError = document.getElementById("capital-error");
+
+    function openCapitalModal() {
+      capitalInput.value = state.initialCapital;
+      capitalError.hidden = true;
       modal.hidden = false;
-      document.getElementById("initial-capital-input").focus();
-    });
-    document.getElementById("modal-cancel").addEventListener("click", () => {
+      capitalInput.focus();
+      capitalInput.select();
+    }
+
+    function closeCapitalModal() {
       modal.hidden = true;
-    });
+    }
+
+    document.getElementById("card-initial").addEventListener("click", openCapitalModal);
+    document.getElementById("modal-cancel").addEventListener("click", closeCapitalModal);
+
     document.getElementById("modal-save").addEventListener("click", () => {
-      const val = Number(document.getElementById("initial-capital-input").value);
-      if (!isNaN(val) && val > 0) {
-        state.initialCapital = val;
-        queueCloudSave();
-        render();
+      const val = Number(capitalInput.value);
+      if (!Number.isFinite(val) || val <= 0) {
+        capitalError.hidden = false;
+        capitalInput.focus();
+        return;
       }
-      modal.hidden = true;
+      state.initialCapital = val;
+      capitalError.hidden = true;
+      queueCloudSave();
+      render();
+      closeCapitalModal();
+    });
+
+    capitalInput.addEventListener("input", () => { capitalError.hidden = true; });
+    capitalInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("modal-save").click();
+      }
+    });
+    modal.addEventListener("click", (e) => {
+      if (e.target === modal) closeCapitalModal();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !modal.hidden) closeCapitalModal();
     });
 
     // Jump to next untraded day
