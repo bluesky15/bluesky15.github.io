@@ -218,6 +218,10 @@ export default function Profile({ profile, failed, flags }) {
           +{" "}
           <a href="https://react.dev" target="_blank" rel="noreferrer">
             React
+          </a>{" "}
+          | my apps -{" "}
+          <a href="/portfolio-calculator/" target="_blank" rel="noopener noreferrer">
+            Calculator
           </a>
         </footer>
       </main>

@@ -1,0 +1,521 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Trading Rules · onlinelkb.in</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --panel-border: #334155;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-dark: #0284c7;
+      --profit: #10b981;
+      --accent-orange: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px 16px 56px;
+      line-height: 1.5;
+    }
+    .app { max-width: 1500px; margin: 0 auto; }
+
+    /* Topbar */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      padding: 10px 16px;
+      margin-bottom: 18px;
+    }
+    .topbar .brand { font-size: 18px; font-weight: 600; margin: 0; }
+    .tabs { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .tab {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+      padding: 8px 18px;
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab:hover { color: var(--text); border-color: #475569; }
+    .tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #0f172a;
+      font-weight: 600;
+    }
+    .who { margin-left: auto; font-size: 13px; color: var(--text-muted); }
+    .who strong { color: var(--text); font-weight: 600; }
+    .who a { color: #f87171; text-decoration: none; }
+    .who a:hover { text-decoration: underline; }
+
+    /* Two-pane workspace */
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.35fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.25);
+    }
+    .panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .panel h2 { font-size: 16px; font-weight: 600; margin: 0; }
+    .hint { font-size: 12px; color: var(--text-muted); margin: 6px 0 14px; }
+    .hint code {
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      border-radius: 4px;
+      padding: 1px 5px;
+      color: #7dd3fc;
+      font-size: 11px;
+    }
+    .sync-status { font-size: 12px; color: var(--profit); }
+    .editor-input {
+      width: 100%;
+      min-height: 62vh;
+      resize: vertical;
+      background: #0f172a;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      color: #e2e8f0;
+      padding: 16px;
+      font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      outline: none;
+    }
+    .editor-input:focus { border-color: var(--primary); }
+    .editor-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+    .btn {
+      background: #263449;
+      border: 1px solid var(--panel-border);
+      color: var(--text);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .btn:hover { border-color: var(--primary); color: #fff; }
+    .btn-primary { background: var(--primary); color: #0f172a; border-color: var(--primary); font-weight: 600; }
+    .btn-primary:hover { background: #7dd3fc; color: #0f172a; }
+    .char-count { margin-left: auto; font-size: 11px; color: var(--text-muted); }
+    .palette { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+    .swatch {
+      border: 1px solid var(--panel-border);
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 11px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .swatch:hover { border-color: currentColor; }
+    .swatch[data-color="red"] { color: #f87171; }
+    .swatch[data-color="green"] { color: #34d399; }
+    .swatch[data-color="blue"] { color: #60a5fa; }
+    .swatch[data-color="yellow"] { color: #fcd34d; }
+    .swatch[data-color="orange"] { color: #fb923c; }
+    .swatch[data-color="purple"] { color: #c084fc; }
+    .swatch[data-color="cyan"] { color: #22d3ee; }
+    .swatch[data-color="white"] { color: #f8fafc; }
+    .swatch[data-color="gray"] { color: #cbd5e1; }
+
+    /* Reading pane */
+    .reader-panel {
+      background: linear-gradient(180deg, #1e293b 0%, #172554 100%);
+      min-height: 62vh;
+      position: relative;
+    }
+    .reader-head { border-bottom: 1px solid rgba(148, 163, 184, 0.18); padding-bottom: 14px; margin-bottom: 22px; }
+    .reader-kicker {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .reader-head h2 {
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      font-size: 30px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #f8fafc;
+    }
+    .rules-display {
+      font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      font-size: clamp(22px, 2.1vw, 34px);
+      line-height: 1.48;
+      color: #f1f5f9;
+      letter-spacing: -0.01em;
+    }
+    .rule { display: flex; gap: 18px; align-items: baseline; margin: 0 0 20px; }
+    .rule-num {
+      flex: 0 0 auto;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.52em;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: 0.06em;
+      transform: translateY(-0.15em);
+    }
+    .rule-text { flex: 1 1 auto; }
+    .rule.bullet { gap: 14px; }
+    .bullet-dot { color: var(--primary); font-size: 0.8em; }
+    .rule-gap { height: 10px; }
+    .rule-heading {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.52em;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #7dd3fc;
+      margin: 28px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid rgba(125, 211, 252, 0.25);
+    }
+    .rule-heading:first-child { margin-top: 0; }
+    .rules-display strong { color: inherit; font-weight: 700; }
+    .rules-display em { color: inherit; font-style: italic; }
+    .rules-display code {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.72em;
+      background: rgba(15, 23, 42, 0.7);
+      border-radius: 6px;
+      padding: 2px 7px;
+      color: #7dd3fc;
+    }
+    .empty {
+      font-family: "Iowan Old Style", Palatino, Georgia, serif;
+      font-size: 20px;
+      color: var(--text-muted);
+      font-style: italic;
+      margin: 40px 0;
+    }
+
+    /* Reading mode */
+    body.focus-mode .editor-panel { display: none; }
+    body.focus-mode .workspace { grid-template-columns: 1fr; }
+    body.focus-mode .reader-panel { min-height: 78vh; padding: 34px 44px; }
+    body.focus-mode .rules-display { font-size: clamp(28px, 3vw, 46px); }
+    body.focus-mode .reader-head h2 { font-size: 40px; }
+
+    @media (max-width: 900px) {
+      .workspace { grid-template-columns: 1fr; }
+      .editor-input { min-height: 40vh; }
+      .panel { padding: 16px; }
+      body.focus-mode .reader-panel { padding: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1 class="brand">Private tools</h1>
+      <nav class="tabs" role="tablist" aria-label="Private tools sections">
+        <a href="/hello" class="tab">📝 My notes</a>
+        <a href="/trade_journal" class="tab">📈 Trading Journal</a>
+        <span class="tab active" aria-current="page">📜 Trading Rules</span>
+      </nav>
+      <button type="button" class="btn" id="btn-focus">⛶ Reading mode</button>
+      <span class="who">Signed in as <strong>{{USERNAME}}</strong> 👋 · <a href="/logout">log out</a></span>
+    </header>
+
+    <div class="workspace">
+      <section class="panel editor-panel">
+        <div class="panel-head">
+          <h2>✍️ Write your rules</h2>
+          <span class="sync-status" id="sync-status">● Cloud Synced</span>
+        </div>
+        <p class="hint">
+          One rule per line. <code># </code> = heading, <code>- </code> = bullet,
+          <code>**bold**</code> = emphasis. Start a line with <code>@red </code> to color
+          the whole line, or wrap words in <code>[red]...[/red]</code> to color part of it.
+        </p>
+        <div class="palette" id="palette" aria-label="Insert text colour">
+          <button type="button" class="swatch" data-color="red">red</button>
+          <button type="button" class="swatch" data-color="green">green</button>
+          <button type="button" class="swatch" data-color="blue">blue</button>
+          <button type="button" class="swatch" data-color="yellow">yellow</button>
+          <button type="button" class="swatch" data-color="orange">orange</button>
+          <button type="button" class="swatch" data-color="purple">purple</button>
+          <button type="button" class="swatch" data-color="cyan">cyan</button>
+          <button type="button" class="swatch" data-color="white">white</button>
+          <button type="button" class="swatch" data-color="gray">gray</button>
+        </div>
+        <textarea id="rules-input" class="editor-input" spellcheck="true" placeholder="# Mindset&#10;- Capital preservation first&#10;- No revenge trades after a loss&#10;**Stop loss is non-negotiable**"></textarea>
+        <div class="editor-actions">
+          <button type="button" class="btn btn-primary" id="btn-save">💾 Save</button>
+          <span class="char-count" id="char-count">0 characters</span>
+        </div>
+      </section>
+
+      <section class="panel reader-panel" id="reader-panel">
+        <div class="reader-head">
+          <span class="reader-kicker">Read every morning</span>
+          <h2>My Trading Rules</h2>
+        </div>
+        <div class="rules-display" id="rules-display"></div>
+        <p class="empty" id="empty" hidden>Write your rules on the left — they will appear here, big and clear.</p>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const STORAGE_KEY = "lkb_trading_rules_v1";
+    const API = "/api/trading_rules";
+    const DEFAULT_TEXT = [
+      "# Mindset",
+      "- Capital preservation comes first",
+      "- If the setup is not there, sit out",
+      "**Stop loss is non-negotiable**",
+      "",
+      "# After the trade",
+      "- Log it before looking at the next one",
+      "- No revenge trades after a loss"
+    ].join("\n");
+
+    const input = document.getElementById("rules-input");
+    const display = document.getElementById("rules-display");
+    const empty = document.getElementById("empty");
+    const count = document.getElementById("char-count");
+    const focusBtn = document.getElementById("btn-focus");
+
+    let text = DEFAULT_TEXT;
+    let rev = 0;
+    let localDirty = false;
+    let saveTimeout = null;
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[c]));
+    }
+
+    const COLORS = {
+      red: "#f87171", green: "#34d399", blue: "#60a5fa", yellow: "#fcd34d",
+      orange: "#fb923c", purple: "#c084fc", cyan: "#22d3ee", white: "#f8fafc",
+      gray: "#cbd5e1"
+    };
+    const COLOR_NAMES = Object.keys(COLORS).join("|");
+    const INLINE_COLOR = new RegExp(`\\[(${COLOR_NAMES})\\]([\\s\\S]*?)\\[/\\1\\]`, "gi");
+    const LINE_COLOR = new RegExp(`^@(${COLOR_NAMES})\\s+([\\s\\S]+)$`, "i");
+
+    function inlineFormat(s) {
+      let out = escapeHtml(s);
+      out = out.replace(INLINE_COLOR, (_, c, body) =>
+        `<span style="color:${COLORS[c.toLowerCase()]}">${body}</span>`);
+      out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+      out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+      return out;
+    }
+
+    function splitLineColor(t) {
+      const m = LINE_COLOR.exec(t);
+      if (!m) return { body: t, style: "" };
+      return { body: m[2], style: ` style="color:${COLORS[m[1].toLowerCase()]}"` };
+    }
+
+    function ruleHtml(n, body, bullet = false, style = "") {
+      const marker = bullet
+        ? '<span class="bullet-dot">•</span>'
+        : `<span class="rule-num">${String(n).padStart(2, "0")}</span>`;
+      return `<div class="rule${bullet ? " bullet" : ""}"${style}>${marker}<span class="rule-text">${inlineFormat(body)}</span></div>`;
+    }
+
+    function renderRules(raw) {
+      let html = "";
+      let number = 0;
+      (raw || "").split(/\r?\n/).forEach((line) => {
+        const { body, style } = splitLineColor(line.trim());
+        if (!body) { html += '<div class="rule-gap"></div>'; return; }
+        const heading = /^#{1,3}\s+(.+)$/.exec(body);
+        if (heading) { html += `<h3 class="rule-heading"${style}>${inlineFormat(heading[1])}</h3>`; return; }
+        const bullet = /^(?:[-*•]|\d+[.)])\s+(.+)$/.exec(body);
+        if (bullet) { html += ruleHtml(number + 1, bullet[1], true, style); return; }
+        number++;
+        html += ruleHtml(number, body, false, style);
+      });
+      display.innerHTML = html;
+      const blank = !(raw || "").trim();
+      empty.hidden = !blank;
+      display.hidden = blank;
+    }
+
+    function setSyncStatus(synced, label) {
+      const el = document.getElementById("sync-status");
+      el.style.color = synced ? "var(--profit)" : "var(--accent-orange)";
+      el.textContent = synced ? "● Cloud Synced" : "● " + (label || "Unsaved");
+    }
+
+    function saveLocal() {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ text, rev })); } catch (e) {}
+    }
+
+    function markChanged() {
+      rev = Date.now();
+      localDirty = true;
+    }
+
+    async function saveNow() {
+      setSyncStatus(false, "Saving...");
+      saveLocal();
+      try {
+        const res = await fetch(API, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, rev })
+        });
+        setSyncStatus(res.ok, res.ok ? "Cloud Synced" : "Local saved (offline)");
+      } catch (e) {
+        setSyncStatus(false, "Local saved (offline)");
+      }
+    }
+
+    function queueSave() {
+      markChanged();
+      setSyncStatus(false, "Saving...");
+      saveLocal();
+      if (saveTimeout) clearTimeout(saveTimeout);
+      saveTimeout = setTimeout(saveNow, 800);
+    }
+
+    function loadLocal() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.text === "string") {
+            text = parsed.text;
+            rev = Number(parsed.rev) || 0;
+          }
+        }
+      } catch (e) {}
+      input.value = text;
+      count.textContent = text.length + " characters";
+      renderRules(text);
+    }
+
+    async function loadCloud() {
+      try {
+        const res = await fetch(API);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!json.ok || typeof json.text !== "string") return;
+        // Do not overwrite edits made while the fetch was in flight.
+        if (localDirty || (json.rev && json.rev < rev)) return;
+        text = json.text;
+        rev = Number(json.rev) || 0;
+        input.value = text;
+        count.textContent = text.length + " characters";
+        renderRules(text);
+        saveLocal();
+        setSyncStatus(true);
+      } catch (e) {
+        console.warn("Cloud load failed, using local rules", e);
+      }
+    }
+
+    input.addEventListener("input", () => {
+      text = input.value;
+      count.textContent = text.length + " characters";
+      renderRules(text);
+      queueSave();
+    });
+
+    document.getElementById("btn-save").addEventListener("click", async () => {
+      markChanged();
+      await saveNow();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        markChanged();
+        saveNow();
+      }
+    });
+
+    focusBtn.addEventListener("click", () => {
+      const on = document.body.classList.toggle("focus-mode");
+      focusBtn.textContent = on ? "✕ Exit reading mode" : "⛶ Reading mode";
+    });
+
+    // Palette: selected text -> [color]...[/color]; cursor only -> @color at line start.
+    document.getElementById("palette").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-color]");
+      if (!btn) return;
+      const name = btn.dataset.color;
+      const value = input.value;
+      const start = input.selectionStart;
+      const end = input.selectionEnd;
+      let next, caret;
+      if (start !== end) {
+        const open = `[${name}]`;
+        const close = `[/${name}]`;
+        next = value.slice(0, start) + open + value.slice(start, end) + close + value.slice(end);
+        caret = end + open.length + close.length;
+      } else {
+        const lineStart = value.lastIndexOf("\n", start - 1) + 1;
+        const tag = `@${name} `;
+        next = value.slice(0, lineStart) + tag + value.slice(lineStart);
+        caret = start + tag.length;
+      }
+      input.value = next;
+      input.setSelectionRange(caret, caret);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    });
+
+    loadLocal();
+    setSyncStatus(false, "Loading cloud...");
+    loadCloud();
+  </script>
+</body>
+</html>

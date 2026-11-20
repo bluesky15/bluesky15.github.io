@@ -33,3 +33,12 @@ CREATE TABLE IF NOT EXISTS trade_journal (
   data TEXT NOT NULL,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Daily trading rules board: one text blob per user, plus a client revision
+-- stamp so a slow cloud fetch cannot overwrite fresher local edits.
+CREATE TABLE IF NOT EXISTS trading_rules (
+  user_id TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  rev INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);

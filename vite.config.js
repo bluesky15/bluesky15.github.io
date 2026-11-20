@@ -5,7 +5,7 @@ import { join } from 'node:path'
 
 // Dev/preview: serve public/portfolio-calculator/index.html for the directory URL.
 // Vite's SPA fallback rewrites /portfolio-calculator/ to the root index.html,
-// so the nav "Calculator" link would open the portfolio app instead.
+// so the footer "Calculator" link would open the portfolio app instead.
 function calculatorHtmlMiddleware() {
   const candidates = [
     join(process.cwd(), 'public', 'portfolio-calculator', 'index.html'),

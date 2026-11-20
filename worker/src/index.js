@@ -9,6 +9,9 @@
  *                                 note's text + images on the right
  *   onlinelkb.in/logout         -> clears session
  *   onlinelkb.in/api/entries*   -> JSON API (list/create/update/delete, gated)
+ *   onlinelkb.in/api/trade_journal/calendar -> next 100 NSE trading days (gated)
+ *   onlinelkb.in/trading_rules      -> daily reading board (editor + large display)
+ *   onlinelkb.in/api/trading_rules  -> JSON API for the board (gated)
  *   onlinelkb.in/img/*          -> gated image serving from Workers KV
  *
  *     any other path -> GitHub Pages origin (zone routes own only the above)
@@ -38,6 +41,8 @@ import loginTemplate from "./pages/login.html";
 import lockedTemplate from "./pages/locked.html";
 import adminTemplate from "./pages/admin.html";
 import tradeJournalTemplate from "./pages/trade_journal.html";
+import tradingRulesTemplate from "./pages/trading_rules.html";
+import { DEFAULT_NSE_DAYS, getNextTradingDays, nextMondayISO, toISODate } from "./trading_days.js";
 
 const COOKIE = "lkb_session";
 const TTL_MS = 24 * 60 * 60 * 1000; // 1 day while testing
@@ -468,6 +473,16 @@ async function serveImage(request, env) {
   }
 }
 
+// GET /api/trade_journal/calendar?from=YYYY-MM-DD — defaults to next Monday.
+// The journal's Reset button uses this to refresh its 100-day schedule.
+function handleTradingDaysCalendar(request) {
+  const { searchParams } = new URL(request.url);
+  const from = searchParams.get("from");
+  const start = from && DATE_RE.test(from) ? from : nextMondayISO(toISODate(new Date()));
+  const { days } = getNextTradingDays(100, start);
+  return json({ ok: true, start, days });
+}
+
 async function handleTradeJournalGet(request, env, username) {
   try {
     try {
@@ -496,6 +511,44 @@ async function handleTradeJournalSave(request, env, username) {
       "INSERT INTO trade_journal (user_id, data, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP"
     ).bind(username, JSON.stringify(payload)).run();
     return json({ ok: true });
+  } catch {
+    return json({ ok: false, error: "Save failed" }, 500);
+  }
+}
+
+/* ---------------- trading rules ---------------- */
+
+const RULES_MAX = 20000;
+
+async function handleTradingRulesGet(env, username) {
+  try {
+    try {
+      await env.DB.prepare(
+        "CREATE TABLE IF NOT EXISTS trading_rules (user_id TEXT PRIMARY KEY, text TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+      ).run();
+    } catch {}
+    const row = await env.DB.prepare("SELECT text, rev FROM trading_rules WHERE user_id = ?").bind(username).first();
+    return json({ ok: true, text: row ? row.text : null, rev: row ? Number(row.rev) || 0 : 0 });
+  } catch {
+    return json({ ok: false, error: "Could not load rules" }, 500);
+  }
+}
+
+async function handleTradingRulesSave(request, env, username) {
+  try {
+    const payload = await request.json();
+    if (!payload || typeof payload.text !== "string") return json({ ok: false, error: "Invalid payload" }, 400);
+    if (payload.text.length > RULES_MAX) return json({ ok: false, error: "Too much text" }, 413);
+    const rev = Number.isFinite(Number(payload.rev)) ? Number(payload.rev) : Date.now();
+    try {
+      await env.DB.prepare(
+        "CREATE TABLE IF NOT EXISTS trading_rules (user_id TEXT PRIMARY KEY, text TEXT NOT NULL, rev INTEGER NOT NULL DEFAULT 0, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)"
+      ).run();
+    } catch {}
+    await env.DB.prepare(
+      "INSERT INTO trading_rules (user_id, text, rev, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(user_id) DO UPDATE SET text = excluded.text, rev = excluded.rev, updated_at = CURRENT_TIMESTAMP"
+    ).bind(username, payload.text, rev).run();
+    return json({ ok: true, rev });
   } catch {
     return json({ ok: false, error: "Save failed" }, 500);
   }
@@ -535,7 +588,13 @@ const adminPage = (username) =>
   page(fill(adminTemplate, { USERNAME: esc(username) }));
 
 const tradeJournalPage = (username) =>
-  page(fill(tradeJournalTemplate, { USERNAME: esc(username) }));
+  page(fill(tradeJournalTemplate, {
+    USERNAME: esc(username),
+    NSE_DAYS_JSON: JSON.stringify(DEFAULT_NSE_DAYS),
+  }));
+
+const tradingRulesPage = (username) =>
+  page(fill(tradingRulesTemplate, { USERNAME: esc(username) }));
 
 
 /* ---------------- router ---------------- */
@@ -573,11 +632,31 @@ export default {
       return username ? tradeJournalPage(username) : Response.redirect(`${origin}/login`, 302);
     }
 
+    if (pathname === "/api/trade_journal/calendar") {
+      const session = await readSession(request, env);
+      if (!session) return json({ ok: false, error: "Unauthorized" }, 401);
+      if (request.method !== "GET") return json({ ok: false, error: "Method not allowed" }, 405);
+      return handleTradingDaysCalendar(request);
+    }
+
     if (pathname === "/api/trade_journal" || pathname.startsWith("/api/trade_journal/")) {
       const session = await readSession(request, env);
       if (!session) return json({ ok: false, error: "Unauthorized" }, 401);
       if (request.method === "GET") return handleTradeJournalGet(request, env, session);
       if (request.method === "POST") return handleTradeJournalSave(request, env, session);
+      return json({ ok: false, error: "Method not allowed" }, 405);
+    }
+
+    if (pathname === "/trading_rules" || pathname === "/trading_rules/") {
+      const username = await readSession(request, env);
+      return username ? tradingRulesPage(username) : Response.redirect(`${origin}/login`, 302);
+    }
+
+    if (pathname === "/api/trading_rules" || pathname === "/api/trading_rules/") {
+      const session = await readSession(request, env);
+      if (!session) return json({ ok: false, error: "Unauthorized" }, 401);
+      if (request.method === "GET") return handleTradingRulesGet(env, session);
+      if (request.method === "POST") return handleTradingRulesSave(request, env, session);
       return json({ ok: false, error: "Method not allowed" }, 405);
     }
 

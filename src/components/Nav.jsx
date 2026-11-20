@@ -44,13 +44,6 @@ export default function Nav({ theme, setTheme, view, onNavigate, flags }) {
               </a>
             );
           })}
-          <a
-            href="/portfolio-calculator/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Calculator
-          </a>
           {flags.resume && (
             <a
               href="/resume.pdf"

@@ -163,6 +163,12 @@
       align-items: center;
       gap: 5px;
     }
+    .action-divider {
+      width: 1px;
+      height: 24px;
+      background: var(--panel-border);
+      margin: 0 2px;
+    }
 
     /* Table Container */
     .table-container {
@@ -283,6 +289,7 @@
       <nav class="tabs" role="tablist" aria-label="Sections">
         <a href="/hello" class="tab">📝 My notes</a>
         <span class="tab active" aria-current="page">📈 Trading Journal</span>
+        <a href="/trading_rules" class="tab">📜 Trading Rules</a>
       </nav>
       <span class="who">Signed in as <strong>{{USERNAME}}</strong> 👋 · <a href="/logout">log out</a></span>
     </header>
@@ -339,9 +346,11 @@
         <span class="sync-status" id="sync-status">● Cloud Synced</span>
       </div>
       <div class="action-right">
+        <button type="button" class="btn" id="btn-drop-past" title="Remove every trading day on or before today and renumber the rest from Day 1">✂️ Drop days till today</button>
+        <span class="action-divider"></span>
         <button type="button" class="btn btn-primary" id="btn-save">💾 Save to Cloud</button>
         <button type="button" class="btn" id="btn-export-csv">📥 Export CSV</button>
-        <button type="button" class="btn btn-danger" id="btn-reset">↺ Reset</button>
+        <button type="button" class="btn btn-danger" id="btn-reset" title="Reset entries and fetch the next 100 trading days from next Monday">↺ Reset &amp; Reload Days</button>
       </div>
     </div>
 
@@ -394,21 +403,52 @@
   </div>
 
   <script>
-    const NSE_DAYS = [{"trade": 1, "date": "2026-11-13", "day": "Friday"}, {"trade": 2, "date": "2026-11-16", "day": "Monday"}, {"trade": 3, "date": "2026-11-17", "day": "Tuesday"}, {"trade": 4, "date": "2026-11-18", "day": "Wednesday"}, {"trade": 5, "date": "2026-11-19", "day": "Thursday"}, {"trade": 6, "date": "2026-11-20", "day": "Friday"}, {"trade": 7, "date": "2026-11-23", "day": "Monday"}, {"trade": 8, "date": "2026-11-25", "day": "Wednesday"}, {"trade": 9, "date": "2026-11-26", "day": "Thursday"}, {"trade": 10, "date": "2026-11-27", "day": "Friday"}, {"trade": 11, "date": "2026-11-30", "day": "Monday"}, {"trade": 12, "date": "2026-12-01", "day": "Tuesday"}, {"trade": 13, "date": "2026-12-02", "day": "Wednesday"}, {"trade": 14, "date": "2026-12-03", "day": "Thursday"}, {"trade": 15, "date": "2026-12-04", "day": "Friday"}, {"trade": 16, "date": "2026-12-07", "day": "Monday"}, {"trade": 17, "date": "2026-12-08", "day": "Tuesday"}, {"trade": 18, "date": "2026-12-09", "day": "Wednesday"}, {"trade": 19, "date": "2026-12-10", "day": "Thursday"}, {"trade": 20, "date": "2026-12-11", "day": "Friday"}, {"trade": 21, "date": "2026-12-14", "day": "Monday"}, {"trade": 22, "date": "2026-12-15", "day": "Tuesday"}, {"trade": 23, "date": "2026-12-16", "day": "Wednesday"}, {"trade": 24, "date": "2026-12-17", "day": "Thursday"}, {"trade": 25, "date": "2026-12-18", "day": "Friday"}, {"trade": 26, "date": "2026-12-21", "day": "Monday"}, {"trade": 27, "date": "2026-12-22", "day": "Tuesday"}, {"trade": 28, "date": "2026-12-23", "day": "Wednesday"}, {"trade": 29, "date": "2026-12-24", "day": "Thursday"}, {"trade": 30, "date": "2026-12-28", "day": "Monday"}, {"trade": 31, "date": "2026-12-29", "day": "Tuesday"}, {"trade": 32, "date": "2026-12-30", "day": "Wednesday"}, {"trade": 33, "date": "2026-12-31", "day": "Thursday"}, {"trade": 34, "date": "2027-01-01", "day": "Friday"}, {"trade": 35, "date": "2027-01-04", "day": "Monday"}, {"trade": 36, "date": "2027-01-05", "day": "Tuesday"}, {"trade": 37, "date": "2027-01-06", "day": "Wednesday"}, {"trade": 38, "date": "2027-01-07", "day": "Thursday"}, {"trade": 39, "date": "2027-01-08", "day": "Friday"}, {"trade": 40, "date": "2027-01-11", "day": "Monday"}, {"trade": 41, "date": "2027-01-12", "day": "Tuesday"}, {"trade": 42, "date": "2027-01-13", "day": "Wednesday"}, {"trade": 43, "date": "2027-01-14", "day": "Thursday"}, {"trade": 44, "date": "2027-01-15", "day": "Friday"}, {"trade": 45, "date": "2027-01-18", "day": "Monday"}, {"trade": 46, "date": "2027-01-19", "day": "Tuesday"}, {"trade": 47, "date": "2027-01-20", "day": "Wednesday"}, {"trade": 48, "date": "2027-01-21", "day": "Thursday"}, {"trade": 49, "date": "2027-01-22", "day": "Friday"}, {"trade": 50, "date": "2027-01-25", "day": "Monday"}, {"trade": 51, "date": "2027-01-27", "day": "Wednesday"}, {"trade": 52, "date": "2027-01-28", "day": "Thursday"}, {"trade": 53, "date": "2027-01-29", "day": "Friday"}, {"trade": 54, "date": "2027-02-01", "day": "Monday"}, {"trade": 55, "date": "2027-02-02", "day": "Tuesday"}, {"trade": 56, "date": "2027-02-03", "day": "Wednesday"}, {"trade": 57, "date": "2027-02-04", "day": "Thursday"}, {"trade": 58, "date": "2027-02-05", "day": "Friday"}, {"trade": 59, "date": "2027-02-08", "day": "Monday"}, {"trade": 60, "date": "2027-02-09", "day": "Tuesday"}, {"trade": 61, "date": "2027-02-10", "day": "Wednesday"}, {"trade": 62, "date": "2027-02-11", "day": "Thursday"}, {"trade": 63, "date": "2027-02-12", "day": "Friday"}, {"trade": 64, "date": "2027-02-15", "day": "Monday"}, {"trade": 65, "date": "2027-02-16", "day": "Tuesday"}, {"trade": 66, "date": "2027-02-17", "day": "Wednesday"}, {"trade": 67, "date": "2027-02-18", "day": "Thursday"}, {"trade": 68, "date": "2027-02-19", "day": "Friday"}, {"trade": 69, "date": "2027-02-22", "day": "Monday"}, {"trade": 70, "date": "2027-02-23", "day": "Tuesday"}, {"trade": 71, "date": "2027-02-24", "day": "Wednesday"}, {"trade": 72, "date": "2027-02-25", "day": "Thursday"}, {"trade": 73, "date": "2027-02-26", "day": "Friday"}, {"trade": 74, "date": "2027-03-01", "day": "Monday"}, {"trade": 75, "date": "2027-03-02", "day": "Tuesday"}, {"trade": 76, "date": "2027-03-03", "day": "Wednesday"}, {"trade": 77, "date": "2027-03-04", "day": "Thursday"}, {"trade": 78, "date": "2027-03-05", "day": "Friday"}, {"trade": 79, "date": "2027-03-08", "day": "Monday"}, {"trade": 80, "date": "2027-03-09", "day": "Tuesday"}, {"trade": 81, "date": "2027-03-11", "day": "Thursday"}, {"trade": 82, "date": "2027-03-12", "day": "Friday"}, {"trade": 83, "date": "2027-03-15", "day": "Monday"}, {"trade": 84, "date": "2027-03-16", "day": "Tuesday"}, {"trade": 85, "date": "2027-03-17", "day": "Wednesday"}, {"trade": 86, "date": "2027-03-18", "day": "Thursday"}, {"trade": 87, "date": "2027-03-19", "day": "Friday"}, {"trade": 88, "date": "2027-03-23", "day": "Tuesday"}, {"trade": 89, "date": "2027-03-24", "day": "Wednesday"}, {"trade": 90, "date": "2027-03-25", "day": "Thursday"}, {"trade": 91, "date": "2027-03-29", "day": "Monday"}, {"trade": 92, "date": "2027-03-30", "day": "Tuesday"}, {"trade": 93, "date": "2027-03-31", "day": "Wednesday"}, {"trade": 94, "date": "2027-04-01", "day": "Thursday"}, {"trade": 95, "date": "2027-04-02", "day": "Friday"}, {"trade": 96, "date": "2027-04-05", "day": "Monday"}, {"trade": 97, "date": "2027-04-06", "day": "Tuesday"}, {"trade": 98, "date": "2027-04-07", "day": "Wednesday"}, {"trade": 99, "date": "2027-04-08", "day": "Thursday"}, {"trade": 100, "date": "2027-04-09", "day": "Friday"}];
+    const NSE_DAYS = {{NSE_DAYS_JSON}};
 
     const STORAGE_KEY = "nse_trade_journal_data_v1";
-    let state = {
-      initialCapital: 84000,
-      days: {} // tradeNumber: { deposit, pnl, withdrawal, notes }
-    };
+    const CALENDAR_API = "/api/trade_journal/calendar";
 
-    // Default Day 1
-    state.days[1] = {
-      deposit: "",
-      pnl: 9000,
-      withdrawal: "",
-      notes: "Day 1: Profit ₹9,000 (+10.71%)"
-    };
+    function freshState(calendar = NSE_DAYS) {
+      return {
+        initialCapital: 84000,
+        // tradeNumber -> { deposit, pnl, withdrawal, notes }
+        days: {
+          1: {
+            deposit: "",
+            pnl: 9000,
+            withdrawal: "",
+            notes: "Day 1: Profit ₹9,000 (+10.71%)"
+          }
+        },
+        calendar: calendar.map((d) => ({ ...d }))
+      };
+    }
+
+    let state = freshState();
+    // Set on every edit so an in-flight cloud fetch cannot undo it.
+    let localDirty = false;
+
+    // Journals saved before the calendar became part of state still work.
+    function normalizeState(obj) {
+      const s = obj && typeof obj === "object" ? obj : {};
+      if (typeof s.initialCapital !== "number") s.initialCapital = 84000;
+      if (!s.days || typeof s.days !== "object") s.days = {};
+      if (!Array.isArray(s.calendar) || s.calendar.length === 0) {
+        s.calendar = NSE_DAYS.map((d) => ({ ...d }));
+      }
+      return s;
+    }
+
+    function markChanged() {
+      state.rev = Date.now();
+      localDirty = true;
+    }
+
+    function todayISO() {
+      const d = new Date();
+      const p = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+    }
 
     function formatINR(val, showPlus = false) {
       if (val === "" || val === null || val === undefined || isNaN(val)) return "—";
@@ -438,7 +478,7 @@
         if (raw) {
           const parsed = JSON.parse(raw);
           if (parsed && typeof parsed.initialCapital === "number") {
-            state = parsed;
+            state = normalizeState(parsed);
           }
         }
       } catch (e) {
@@ -452,7 +492,11 @@
         if (res.ok) {
           const json = await res.json();
           if (json && json.ok && json.data) {
-            state = json.data;
+            const cloud = normalizeState(json.data);
+            // A slow fetch must not resurrect the old calendar/entries after
+            // the user has edited locally (or while the save is still queued).
+            if (localDirty || (state.rev && (cloud.rev || 0) < state.rev)) return;
+            state = cloud;
             saveLocal();
             render();
             setSyncStatus(true);
@@ -471,6 +515,7 @@
 
     let saveTimeout = null;
     function queueCloudSave() {
+      markChanged();
       setSyncStatus(false, "Saving...");
       saveLocal();
       if (saveTimeout) clearTimeout(saveTimeout);
@@ -514,8 +559,8 @@
 
       const computedRows = [];
 
-      for (let i = 0; i < NSE_DAYS.length; i++) {
-        const item = NSE_DAYS[i];
+      for (let i = 0; i < state.calendar.length; i++) {
+        const item = state.calendar[i];
         const tradeNo = item.trade;
         const entry = state.days[tradeNo] || { deposit: "", pnl: "", withdrawal: "", notes: "" };
 
@@ -573,7 +618,8 @@
           totalWithdrPct,
           currentBal,
           overallROI,
-          completedDays
+          completedDays,
+          totalDays: state.calendar.length
         }
       };
     }
@@ -600,7 +646,7 @@
       roiEl.textContent = formatPct(summary.overallROI);
       roiEl.className = "kpi-val " + (summary.overallROI >= 0 ? "text-profit" : "text-loss");
 
-      document.getElementById("kpi-progress").textContent = summary.completedDays + " / 100";
+      document.getElementById("kpi-progress").textContent = summary.completedDays + " / " + summary.totalDays;
 
       // Render table rows
       const tbody = document.getElementById("table-body");
@@ -860,22 +906,59 @@
       }
     });
 
-    // Reset button
-    document.getElementById("btn-reset").addEventListener("click", () => {
-      if (confirm("Reset trading journal to Day 1 default (₹84k initial, ₹9k profit)?")) {
-        state = {
-          initialCapital: 84000,
-          days: {
-            1: {
-              deposit: "",
-              pnl: 9000,
-              withdrawal: "",
-              notes: "Day 1: Profit ₹9,000 (+10.71%)"
-            }
-          }
-        };
+    // Drop every trading day on or before today, renumber the remaining ones.
+    document.getElementById("btn-drop-past").addEventListener("click", () => {
+      const today = todayISO();
+      const kept = state.calendar.filter((d) => d.date > today);
+      const dropped = state.calendar.length - kept.length;
+      if (dropped === 0) {
+        alert("There are no trading days on or before " + today + " to drop.");
+        return;
+      }
+      if (kept.length === 0) {
+        alert("No trading days remain after today — use Reset & Reload Days instead.");
+        return;
+      }
+      if (!confirm(`Drop ${dropped} trading day${dropped === 1 ? "" : "s"} up to ${today}? Their entries will be deleted and the rest renumbered from Day 1.`)) return;
+
+      const renumber = {};
+      kept.forEach((d, i) => { renumber[d.trade] = i + 1; });
+      const remaining = {};
+      Object.entries(state.days).forEach(([trade, entry]) => {
+        const next = renumber[Number(trade)];
+        if (next) remaining[next] = entry;
+      });
+      state.calendar = kept.map((d, i) => ({ ...d, trade: i + 1 }));
+      state.days = remaining;
+      queueCloudSave();
+      render();
+    });
+
+    // Reset: fetch a fresh 100-day calendar from the worker (next Monday start)
+    // and restore the Day 1 default. Keeps the familiar reset behaviour.
+    document.getElementById("btn-reset").addEventListener("click", async (e) => {
+      if (!confirm("Reset the journal and fetch the next 100 trading days from next Monday? Current entries will be replaced with the Day 1 default (₹84k initial, ₹9k profit).")) return;
+
+      const btn = e.currentTarget;
+      const originalHtml = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = "⏳ Loading days…";
+      try {
+        const res = await fetch(CALENDAR_API);
+        const json = await res.json();
+        if (!res.ok || !json.ok || !Array.isArray(json.days) || json.days.length === 0) {
+          throw new Error("calendar unavailable");
+        }
+        state = freshState(json.days);
         queueCloudSave();
         render();
+        document.getElementById("table-scroll").scrollTop = 0;
+      } catch (err) {
+        console.warn("Could not load trading calendar", err);
+        alert("Could not fetch the next 100 trading days. The journal was not changed.");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
       }
     });
 

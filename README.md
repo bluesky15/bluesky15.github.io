@@ -186,6 +186,7 @@ Unit and component tests run on [Vitest](https://vitest.dev) with Testing Librar
 | `src/__tests__/Profile.test.jsx` | Loading/error states, content rendering, social icons, Resume gating |
 | `src/__tests__/Blogs.test.jsx` | Archive list, count pluralization, year/tag filters, reader view lazy-loading, error states |
 | `src/__tests__/App.test.jsx` | Wasm flag loading, render gating until flags resolve, fallback defaults |
+| `tests/trading-days.test.mjs` | Next-Monday math, 100-day generation, weekday/holiday filtering, seed-calendar parity |
 
 Run `npm test` before pushing; the flags-wasm suite will fail if you edited `wasm/flags/flags.json` but forgot `npm run wasm`.
 
@@ -199,8 +200,9 @@ re-exports the same worker code.
 
 | Path | Purpose |
 |---|---|
-| `worker/src/index.js` | auth/session, notes API, gated image serving |
-| `worker/src/pages/*.html` | login, lockout and admin page templates |
+| `worker/src/index.js` | auth/session, notes API, trading-days API, gated image serving |
+| `worker/src/trading_days.js` | shared NSE calendar: seed days, holiday gaps, next-100 generator |
+| `worker/src/pages/*.html` | login, lockout, admin, trading-journal and trading-rules page templates |
 | `worker/schema.sql` | D1 tables for a fresh install |
 | `worker/migrations/` | incremental D1 changes (apply before deploying) |
 
@@ -218,6 +220,28 @@ npx wrangler d1 migrations apply lkb-auth --remote --config worker/wrangler.toml
 # deploy the worker (run the migration first so writes never hit a missing column)
 npx wrangler deploy --config worker/wrangler.toml
 ```
+
+The 100-day trading journal (`/trade_journal`) stores its day entries **and**
+its calendar in D1. Its action bar has two day-management tools:
+
+| Button | What it does |
+|---|---|
+| `✂️ Drop days till today` | Deletes every trading day dated on/before today, discards their entries and renumbers the remaining days from Day 1. |
+| `↺ Reset & Reload Days` | Restores the Day 1 default and calls `GET /api/trade_journal/calendar`, which returns a fresh 100-day weekday calendar starting **next Monday**. |
+
+`GET /api/trade_journal/calendar?from=YYYY-MM-DD` is session-gated; `from`
+defaults to next Monday. Trading days are Mon–Fri minus the market holidays
+encoded as gaps in the shipped calendar (`worker/src/trading_days.js`); dates
+past that curated range are weekdays only.
+
+The **Trading Rules** page (`/trading_rules`, linked from the journal and admin
+topbars) is a daily reading board: edit one rule per line on the left, and the
+right pane renders them in large serif type. `# ` starts a heading, `- ` a
+bullet, `**text**` bold and `*text*` italic. `@red ` colors a whole line and
+`[red]text[/red]` colors just a phrase (red/green/blue/yellow/orange/purple/cyan/
+white/gray); the swatch buttons insert these markers. Edits auto-save to D1 via
+`GET/POST /api/trading_rules`; `⛶ Reading mode` hides the editor for a clean
+full-screen view.
 
 Local development uses `--local` instead of `--remote` and stores state under
 `worker/.wrangler/`.
